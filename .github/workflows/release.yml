@@ -111,13 +111,11 @@ jobs:
           python -m unittest discover -s tests -v 2>&1 | tee macos-unittest.log
           status=${PIPESTATUS[0]}
           if [[ "$status" -ne 0 ]]; then
-            python - <<'PY'
-            from pathlib import Path
-            text = Path("macos-unittest.log").read_text(errors="replace")
-            message = text[-6000:]
-            message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-            print(f"::error title=macOS unittest failure::{message}")
-            PY
+            summary="$(grep -E '^(FAIL|ERROR):|^FAILED|^Ran ' macos-unittest.log | tr '\n' ' ' | cut -c1-3500)"
+            summary="${summary//%/%25}"
+            summary="${summary//$'\r'/%0D}"
+            summary="${summary//$'\n'/%0A}"
+            echo "::error title=macOS unittest failure::$summary"
           fi
           exit "$status"
       - name: Report macOS test failure
