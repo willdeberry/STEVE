@@ -192,7 +192,9 @@ class LiveUpdateTests(unittest.TestCase):
         try:
             sys.modules["adsk"] = fake_adsk
             sys.modules["adsk.core"] = fake_core
-            sys.path = [entry for entry in sys.path if Path(entry).resolve() != (helper.parent / "STEVE").resolve()]
+            sys.path = [entry for entry in sys.path
+                        if Path(entry).resolve() != helper.resolve()
+                        and Path(entry).resolve() != (helper.parent / "STEVE").resolve()]
             spec = importlib.util.spec_from_file_location("steve_updater_isolated", helper / "STEVEUpdater.py")
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)

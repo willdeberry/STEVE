@@ -6,6 +6,7 @@ live-update request path is disabled until a later release is validated in
 Fusion.
 """
 from pathlib import Path
+import importlib.util
 import json
 import sys
 import threading
@@ -13,14 +14,18 @@ import traceback
 
 import adsk.core
 
-# Fusion exposes the helper's own directory while loading this add-in. Keep
-# the helper self-contained so replacing STEVE cannot affect its imports.
-from update_core import (  # noqa: E402
-    apply_in_fusion,
-    data_home,
-    read_request,
-    recover_journal,
-)
+# Fusion does not guarantee that this add-in's directory is on sys.path.
+# Load the sibling core explicitly and keep it independent of replaceable STEVE.
+_core_path = Path(__file__).resolve().with_name("update_core.py")
+_core_spec = importlib.util.spec_from_file_location("steve_updater_update_core", _core_path)
+if _core_spec is None or _core_spec.loader is None:
+    raise ImportError(f"Could not load updater core: {_core_path}")
+_core = importlib.util.module_from_spec(_core_spec)
+_core_spec.loader.exec_module(_core)
+apply_in_fusion = _core.apply_in_fusion
+data_home = _core.data_home
+read_request = _core.read_request
+recover_journal = _core.recover_journal
 
 ENABLED = True
 POLL_SECONDS = 1.0
