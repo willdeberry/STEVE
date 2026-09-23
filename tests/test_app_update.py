@@ -112,7 +112,7 @@ class AppUpdateTests(unittest.TestCase):
         (failed / "install-result.txt").write_text("Waiting for Fusion to close")
         self.assertIsNone(previous_install_result(self.home, "0.4.0"))
 
-    @unittest.skipUnless(shutil.which("bash") and shutil.which("shasum"), "macOS installer shell tools")
+    @unittest.skipUnless(os.name != "nt" and shutil.which("bash") and shutil.which("shasum"), "macOS installer shell tools on POSIX")
     def test_packaged_installer_updates_disposable_managed_addin_and_retains_backup(self):
         package = self.root / "package"
         payload = package / "STEVE"
@@ -136,7 +136,7 @@ class AppUpdateTests(unittest.TestCase):
         backups = list((self.addins.parent / "STEVE-install-backups").glob("*/STEVE.py"))
         self.assertEqual([path.read_text() for path in backups], ["old version"])
 
-    @unittest.skipUnless(shutil.which("bash") and shutil.which("shasum"), "installer shell tools")
+    @unittest.skipUnless(os.name != "nt" and shutil.which("bash") and shutil.which("shasum"), "macOS installer shell tools on POSIX")
     def test_installer_refuses_when_fusion_reopens_during_swap(self):
         package = self.root / "package"
         payload = package / "STEVE"
