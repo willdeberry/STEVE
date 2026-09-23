@@ -111,6 +111,9 @@ class AppUpdateTests(unittest.TestCase):
         self.assertIsNone(previous_install_result(self.home, "0.5.0"))
         (failed / "install-result.txt").write_text("Waiting for Fusion to close")
         self.assertIsNone(previous_install_result(self.home, "0.4.0"))
+        (failed / "install-result.txt").write_text("Installed. Reopen Fusion to use the update.")
+        self.assertIsNone(previous_install_result(self.home, "0.4.0"))
+        self.assertIn("STEVE 0.5.0 installed", previous_install_result(self.home, "0.5.0"))
 
     @unittest.skipUnless(os.name != "nt" and shutil.which("bash") and shutil.which("shasum"), "macOS installer shell tools on POSIX")
     def test_packaged_installer_updates_disposable_managed_addin_and_retains_backup(self):

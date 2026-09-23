@@ -214,7 +214,7 @@ class Controller:
                                 "updateStatus": f"Couldn’t prepare installation: {exc}"})
         else:
             self._update_state({"updateInstalling": False, "updateInstallReady": True,
-                                "updateStatus": "Update queued. Save your work and quit Fusion; installation runs after it closes. Reopen Fusion when complete."})
+                                "updateStatus": "Update queued. Save your work and quit Fusion to apply it. Wait for installation to finish, then Restart Fusion to use the new STEVE version."})
 
     def start_update_checks(self):
         self.updates.request()

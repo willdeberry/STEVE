@@ -404,6 +404,7 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(stage.call_args.kwargs["expected_digest"], "a" * 64)
             launch.assert_called_once_with(Path("/staged"))
             self.assertIn("quit Fusion", self.controller.snapshot()["updateStatus"])
+            self.assertIn("Restart Fusion", self.controller.snapshot()["updateStatus"])
 
     def test_one_click_update_downloads_then_installs_only_matching_verified_release(self):
         release = {"version": "0.5.0"}

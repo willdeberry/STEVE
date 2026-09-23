@@ -40,9 +40,10 @@ def _verify_staged(archive, destination):
 
 
 def previous_install_result(home, current):
-    """Show only failed attempts at a newer version, never an old success."""
+    """Report a completed current-version install or a newer failed attempt."""
     root = Path(home) / "pending-updates"
     failures = []
+    successes = []
     current_key = version_key(current)
     if current_key is None:
         return None
@@ -54,14 +55,16 @@ def previous_install_result(home, current):
             continue
         version = name.removeprefix("STEVE-").removesuffix("-macos-arm64").removesuffix("-windows-x64")
         release_key = version_key(version)
-        if release_key is None or release_key <= current_key:
+        if release_key is None or release_key < current_key:
             continue
         result = folder / "install-result.txt"
         if result.is_file() and not result.is_symlink():
             text = result.read_text(encoding="utf-8", errors="replace")[:2048]
-            if "Installation failed" in text:
+            if release_key > current_key and "Installation failed" in text:
                 failures.append((release_key, f"STEVE {version} update failed. {text.strip()} See {result} for details."))
-    return max(failures, default=(None, None))[1]
+            elif release_key == current_key and text.startswith("Installed."):
+                successes.append((release_key, f"STEVE {version} installed successfully. You’re running the updated version."))
+    return max(failures, default=(None, None))[1] or max(successes, default=(None, None))[1]
 
 
 def stage_update(archive, version, home, addins, platform=None, expected_digest=None):
