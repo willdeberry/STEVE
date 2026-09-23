@@ -2,7 +2,7 @@ name: Build and release
 
 on:
   push:
-    branches: [main]
+    branches: [main, test/in-fusion-bootstrap]
   pull_request:
   workflow_dispatch:
 
@@ -126,7 +126,7 @@ jobs:
   publish:
     name: Publish verified preview
     needs: [windows, macos]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.repository == 'willdeberry/STEVE' && github.ref == 'refs/heads/test/in-fusion-bootstrap'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:

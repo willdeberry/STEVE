@@ -101,6 +101,30 @@ install_payload() {
     cp "$destination/steve-upgrade.json" "$staging/steve-upgrade.json" || fail "The upgrade record could not be preserved."
   fi
   local replaced="${previous:-$destination}"
+  local helper_staged="$staging/STEVEUpdater"
+  local helper_source="$destination/STEVEUpdater"
+  local helper_destination="$root/STEVEUpdater"
+  local helper_backup="$backup_root/STEVEUpdater-$(date -u +%Y%m%d-%H%M%S)-$(uuidgen | tr -d '-')"
+  local helper_backed_up=0 helper_moved=0
+  # Validate the migration helper while the verified staging tree is still
+  # intact. A malformed helper must not move the old installation first.
+  if [[ -e "$helper_staged" ]]; then
+    [[ ! -L "$helper_staged" && -f "$helper_staged/STEVEUpdater.py" && -f "$helper_staged/STEVEUpdater.manifest" ]] || fail "The STEVEUpdater helper is incomplete."
+  fi
+  rollback_transaction() {
+    if [[ "$helper_moved" == 1 && -e "$helper_destination" ]]; then
+      rm -rf "$helper_destination"
+    fi
+    if [[ "$helper_backed_up" == 1 && -e "$helper_backup" && ! -e "$helper_destination" ]]; then
+      mv "$helper_backup" "$helper_destination" || true
+    fi
+    if [[ -e "$destination" ]]; then
+      rm -rf "$destination"
+    fi
+    if [[ -d "$backup" && ! -e "$replaced" ]]; then
+      mv "$backup" "$replaced" || true
+    fi
+  }
   # Fusion can reopen after the outer wait; do not swap a live add-in.
   if pgrep -x "Autodesk Fusion" > /dev/null; then
     fail "Fusion reopened during installation. Quit Fusion and retry."
@@ -117,10 +141,27 @@ install_payload() {
     fail "Fusion reopened during installation. Quit Fusion and retry."
   fi
   if ! mv "$staging" "$destination"; then
-    if [[ -d "$backup" && ! -d "$replaced" ]]; then
-      mv "$backup" "$replaced"
-    fi
+    rollback_transaction
     fail "STEVE could not be moved into place."
+  fi
+
+  # The migration payload carries the lifecycle helper inside the verified
+  # archive, but Fusion must load it as a separate sibling add-in.
+  if [[ -d "$helper_source" ]]; then
+    mkdir -p "$backup_root" || { rollback_transaction; fail "The backup directory could not be created."; }
+    [[ ! -L "$helper_destination" ]] || { rollback_transaction; fail "The STEVEUpdater installation is a filesystem link."; }
+    if [[ -e "$helper_destination" ]]; then
+      if ! mv "$helper_destination" "$helper_backup"; then
+        rollback_transaction
+        fail "The previous STEVEUpdater could not be backed up."
+      fi
+      helper_backed_up=1
+    fi
+    if ! mv "$helper_source" "$helper_destination"; then
+      rollback_transaction
+      fail "The STEVEUpdater helper could not be installed."
+    fi
+    helper_moved=1
   fi
 }
 

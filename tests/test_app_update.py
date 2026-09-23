@@ -119,9 +119,13 @@ class AppUpdateTests(unittest.TestCase):
         payload.mkdir(parents=True)
         (payload / "STEVE.manifest").write_text('{"version":"0.5.0"}')
         (payload / "STEVE.py").write_text("new version")
+        helper = payload / "STEVEUpdater"
+        helper.mkdir()
+        (helper / "STEVEUpdater.manifest").write_text('{"type":"addin"}')
+        (helper / "STEVEUpdater.py").write_text("enabled = False")
         (package / "SHA256SUMS").write_text("\n".join(
-            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
-            for path in sorted(payload.iterdir())) + "\n")
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(payload).as_posix()}"
+            for path in sorted(payload.rglob("*")) if path.is_file()) + "\n")
         installer = Path(__file__).resolve().parents[1] / "scripts/installer/Install STEVE.command"
         (self.addins / "STEVE/STEVE.py").write_text("old version")
         bin_dir = self.root / "bin"
@@ -133,8 +137,43 @@ class AppUpdateTests(unittest.TestCase):
         result = subprocess.run(["bash", str(installer), "--test-install", str(package), str(self.addins)], env=env, timeout=30)
         self.assertEqual(result.returncode, 0, (package / "installer-test-error.txt").read_text() if (package / "installer-test-error.txt").exists() else "")
         self.assertEqual((self.addins / "STEVE/STEVE.py").read_text(), "new version")
+        self.assertTrue((self.addins / "STEVEUpdater/STEVEUpdater.py").is_file())
+        self.assertFalse((self.addins / "STEVE/STEVEUpdater").exists())
         backups = list((self.addins.parent / "STEVE-install-backups").glob("*/STEVE.py"))
         self.assertEqual([path.read_text() for path in backups], ["old version"])
+
+    @unittest.skipUnless(os.name != "nt" and shutil.which("bash") and shutil.which("shasum"), "macOS installer shell tools on POSIX")
+    def test_installer_restores_main_and_helper_when_helper_promotion_fails(self):
+        package = self.root / "package-failure"
+        payload = package / "STEVE"
+        payload.mkdir(parents=True)
+        (payload / "STEVE.manifest").write_text('{"version":"0.5.0"}')
+        (payload / "STEVE.py").write_text("new version")
+        helper = payload / "STEVEUpdater"
+        helper.mkdir()
+        (helper / "STEVEUpdater.manifest").write_text('{"type":"addin"}')
+        (helper / "STEVEUpdater.py").write_text("new helper")
+        (package / "SHA256SUMS").write_text("\n".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(payload).as_posix()}"
+            for path in sorted(payload.rglob("*")) if path.is_file()) + "\n")
+        (self.addins / "STEVE/STEVE.py").write_text("old version")
+        old_helper = self.addins / "STEVEUpdater"
+        old_helper.mkdir()
+        (old_helper / "STEVEUpdater.py").write_text("old helper")
+        bin_dir = self.root / "bin-failure"
+        bin_dir.mkdir()
+        uuid = bin_dir / "uuidgen"
+        uuid.write_text("#!/bin/sh\nprintf 'abcdef0123456789abcdef0123456789\\n'\n")
+        uuid.chmod(0o755)
+        mv = bin_dir / "mv"
+        mv.write_text("#!/bin/sh\ncase \"$1 $2\" in *STEVEUpdater*) exit 1;; esac\nexec /bin/mv \"$@\"\n")
+        mv.chmod(0o755)
+        env = {**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"]}
+        installer = Path(__file__).resolve().parents[1] / "scripts/installer/Install STEVE.command"
+        result = subprocess.run(["bash", str(installer), "--test-install", str(package), str(self.addins)], env=env, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.addins / "STEVE/STEVE.py").read_text(), "old version")
+        self.assertEqual((old_helper / "STEVEUpdater.py").read_text(), "old helper")
 
     @unittest.skipUnless(os.name != "nt" and shutil.which("bash") and shutil.which("shasum"), "macOS installer shell tools on POSIX")
     def test_installer_refuses_when_fusion_reopens_during_swap(self):

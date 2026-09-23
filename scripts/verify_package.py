@@ -46,10 +46,14 @@ def main():
         expected, relative = line.split("  ", 1)
         assert relative not in payload_names, "Duplicate payload entry"
         payload_names.add(relative)
-        assert digest(installed / relative) == expected, f"Installed file mismatch: {relative}"
+        installed_relative = relative
+        if relative.startswith("STEVE/STEVEUpdater/"):
+            installed_relative = relative.replace("STEVE/STEVEUpdater/", "STEVEUpdater/", 1)
+        assert digest((destination / installed_relative)) == expected, f"Installed file mismatch: {relative}"
         files += 1
-    # Ensure the archive contains this checkout's current add-in, not an older build.
+    # Ensure the archive contains this checkout's current add-ins, not an older build.
     source = ROOT / "addin/STEVE"
+    helper_source = ROOT / "addin/STEVEUpdater"
     expected_names = {"LICENSE"}
     assert (installed / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes(), "Missing or stale installed license"
     for path in source.rglob("*"):
@@ -61,6 +65,13 @@ def main():
             relative = "licenses/" + path.relative_to(ROOT / "licenses").as_posix()
             expected_names.add(relative)
             assert digest(path) == digest(installed / relative), "Stale license file"
+    for path in helper_source.rglob("*"):
+        if path.is_file() and path.suffix not in (".pyc", ".pyo"):
+            relative = "STEVE/STEVEUpdater/" + path.relative_to(helper_source).as_posix()
+            expected_names.add(relative)
+            installed_helper = destination / relative.replace("STEVE/STEVEUpdater/", "STEVEUpdater/", 1)
+            assert digest(installed_helper) == digest(path), f"Stale helper package: {path}"
+    assert (destination / "STEVEUpdater" / "STEVEUpdater.py").is_file(), "Missing installed STEVEUpdater"
     assert payload_names == expected_names, "Package has missing or obsolete payload files"
     print(f"Complete zip installed; {files} payload files verified against checksums and source", flush=True)
     sys.path.insert(0, str(installed))

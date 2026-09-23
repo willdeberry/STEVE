@@ -1,0 +1,10 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "author": "10-X-eng",
+  "description": {"": "STEVE update lifecycle helper."},
+  "version": "0.4.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": false
+}

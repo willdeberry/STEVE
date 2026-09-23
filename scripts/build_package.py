@@ -66,6 +66,11 @@ def find_compiler():
     raise RuntimeError("Building the Windows installer requires the .NET Framework C# compiler on PATH or under SystemRoot.")
 
 
+def check_helper(source):
+    if not (source / "STEVEUpdater.py").is_file() or not (source / "STEVEUpdater.manifest").is_file():
+        raise RuntimeError("Missing the STEVEUpdater lifecycle helper.")
+
+
 def check_payload(source, target):
     suffix = executable_suffix(target)
     required = ["STEVE.py", "STEVE.manifest", "resources/32x32.png", "panel/panel.js", "panel/fusion.css",
@@ -97,7 +102,9 @@ def main(target=None):
     audit()
     target = target or host_target()
     source = ROOT / "addin" / "STEVE"
+    helper_source = ROOT / "addin" / "STEVEUpdater"
     check_payload(source, target)
+    check_helper(helper_source)
     if executable_suffix(target):
         find_compiler()
     package = ROOT / "dist" / package_name(target)
@@ -106,6 +113,10 @@ def main(target=None):
     package.mkdir(parents=True)
     payload = package / "STEVE"
     shutil.copytree(source, payload, ignore=shutil.ignore_patterns("__pycache__", ".vscode", "*.pyc", "*.pyo"))
+    # Ship the lifecycle helper inside the verified STEVE payload. The native
+    # installer promotes it to its own Fusion AddIns folder after verification.
+    shutil.copytree(helper_source, payload / "STEVEUpdater",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
     shutil.copytree(ROOT / "licenses", payload / "licenses")
     shutil.copyfile(ROOT / "LICENSE", payload / "LICENSE")
     shutil.copyfile(ROOT / "LICENSE", package / "LICENSE")

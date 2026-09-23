@@ -70,10 +70,11 @@ class ReleaseTests(unittest.TestCase):
         future_version = f"{major}.{minor}.{patch_number + 1}"
         response = MagicMock()
         response.__enter__.return_value.read.return_value = json.dumps([release(future_version)]).encode()
-        with patch("steve.updates.urlopen", return_value=response) as urlopen:
-            self.assertEqual(check_release()["version"], future_version)
+        with patch("steve.updates.host_target", return_value="aarch64-apple-darwin"):
+            with patch("steve.updates.urlopen", return_value=response) as urlopen:
+                self.assertEqual(check_release()["version"], future_version)
         request = urlopen.call_args.args[0]
-        self.assertTrue(request.full_url.startswith("https://api.github.com/repos/10-X-eng/STEVE/releases?"))
+        self.assertTrue(request.full_url.startswith("https://api.github.com/repos/willdeberry/STEVE/releases?"))
         self.assertNotIn("Authorization", request.headers)
         self.assertEqual(urlopen.call_args.kwargs["timeout"], 10)
         response.__enter__.return_value.read.assert_called_once_with(2 * 1024 * 1024 + 1)

@@ -406,6 +406,20 @@ class ControllerTests(unittest.TestCase):
             self.assertIn("quit Fusion", self.controller.snapshot()["updateStatus"])
             self.assertIn("Restart Fusion", self.controller.snapshot()["updateStatus"])
 
+    def test_feature_gated_live_update_publishes_request_without_launching_installer(self):
+        self.controller.state["updateInfo"] = {"version": "0.5.0"}
+        self.controller.state["updateDownload"] = {"state": "ready", "version": "0.5.0", "path": "/verified.zip", "sha256": "a" * 64}
+        with patch("steve.controller.stage_update", return_value=Path("/staged")) as stage, \
+             patch("steve.controller.launch_update") as launch, \
+             patch("steve.controller.write_live_update_request") as request, \
+             patch("steve.controller.LIVE_UPDATE_ENABLED", True):
+            self.controller.dispatch("installUpdate")
+            eventually(lambda: request.called)
+            self.assertEqual(stage.call_args.args[0], Path("/verified.zip"))
+            self.assertEqual(request.call_args.args, (self.controller.debug.folder.parent, Path("/staged"), "0.5.0"))
+            launch.assert_not_called()
+            self.assertIn("in-Fusion", self.controller.snapshot()["updateStatus"])
+
     def test_one_click_update_downloads_then_installs_only_matching_verified_release(self):
         release = {"version": "0.5.0"}
         self.controller.state["updateInfo"] = release

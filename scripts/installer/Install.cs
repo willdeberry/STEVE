@@ -88,6 +88,20 @@ class Installer : Form
             throw new IOException("Installation folders must not be filesystem links.");
     }
 
+    static void RestoreInstallation(string destination, string replaced, string backup,
+                                    string helperDestination, string helperBackup,
+                                    bool helperBackedUp, bool helperMoved)
+    {
+        if (helperMoved && Directory.Exists(helperDestination))
+            Directory.Delete(helperDestination, true);
+        if (helperBackedUp && Directory.Exists(helperBackup) && !Directory.Exists(helperDestination))
+            Directory.Move(helperBackup, helperDestination);
+        if (Directory.Exists(destination))
+            Directory.Delete(destination, true);
+        if (Directory.Exists(backup) && !Directory.Exists(replaced))
+            Directory.Move(backup, replaced);
+    }
+
     static string PreviousInstallation(string root)
     {
         string found = null;
@@ -158,6 +172,11 @@ class Installer : Form
             Directory.CreateDirectory(Path.GetDirectoryName(target));
             File.Copy(Within(source, relative), target, true);
         }
+        string stagedHelper = Path.Combine(staging, "STEVEUpdater");
+        if (Directory.Exists(stagedHelper) &&
+            (!File.Exists(Path.Combine(stagedHelper, "STEVEUpdater.py")) ||
+             !File.Exists(Path.Combine(stagedHelper, "STEVEUpdater.manifest"))))
+            throw new IOException("The STEVEUpdater helper is incomplete.");
         File.WriteAllText(Path.Combine(staging, "steve-install-marker.txt"), "STEVE managed installation");
         if (previous != null)
             File.WriteAllText(Path.Combine(staging, "steve-upgrade.json"), new JavaScriptSerializer().Serialize(
@@ -183,6 +202,38 @@ class Installer : Form
         {
             if (Directory.Exists(backup) && !Directory.Exists(replaced)) Directory.Move(backup, replaced);
             throw;
+        }
+
+        // The migration payload carries the lifecycle helper inside the
+        // verified archive, but Fusion must load it as a separate sibling add-in.
+        string helperSource = Path.Combine(destination, "STEVEUpdater");
+        string helperDestination = Within(root, "STEVEUpdater");
+        string helperBackup = Path.Combine(backupRoot, "STEVEUpdater-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
+        bool helperBackedUp = false;
+        bool helperMoved = false;
+        if (Directory.Exists(helperSource))
+        {
+            try
+            {
+                PlainDirectory(helperSource);
+                if (!File.Exists(Path.Combine(helperSource, "STEVEUpdater.py")) ||
+                    !File.Exists(Path.Combine(helperSource, "STEVEUpdater.manifest")))
+                    throw new IOException("The STEVEUpdater helper is incomplete.");
+                PlainDirectory(helperDestination);
+                if (Directory.Exists(helperDestination))
+                {
+                    Directory.Move(helperDestination, helperBackup);
+                    helperBackedUp = true;
+                }
+                Directory.Move(helperSource, helperDestination);
+                helperMoved = true;
+            }
+            catch
+            {
+                RestoreInstallation(destination, replaced, backup, helperDestination, helperBackup,
+                                    helperBackedUp, helperMoved);
+                throw;
+            }
         }
     }
 

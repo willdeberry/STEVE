@@ -1,0 +1,175 @@
+"""Coordination primitives for the experimental in-Fusion updater.
+
+The current release still uses the detached installer. This module is the
+platform-neutral core for a future helper add-in that owns the Fusion
+stop/swap/run handoff. It deliberately contains no Autodesk imports.
+"""
+import json
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+from uuid import uuid4
+
+REQUEST_NAME = "live-update.json"
+
+
+def request_path(home):
+    return Path(home) / "pending-updates" / REQUEST_NAME
+
+
+def _trusted_staged(home, package):
+    home = Path(home).resolve()
+    package = Path(package).resolve()
+    pending = (home / "pending-updates").resolve()
+    if not package.is_relative_to(pending):
+        raise ValueError("The live update package must be under pending-updates.")
+    if not package.is_dir() or package.is_symlink():
+        raise ValueError("The live update package is not a directory.")
+    if not (package / "STEVE" / "STEVE.manifest").is_file() or not (package / "STEVE" / "STEVE.py").is_file():
+        raise ValueError("The live update package is incomplete.")
+    return package
+
+
+def _valid_version(version):
+    return (isinstance(version, str) and version.count(".") == 2
+            and all(part.isdigit() for part in version.split(".")))
+
+
+def write_request(home, package, version):
+    """Atomically publish a bounded request for the separate helper add-in."""
+    if not _valid_version(version):
+        raise ValueError("The live update request has an invalid version.")
+    package = _trusted_staged(home, package)
+    request = request_path(home)
+    request.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=request.parent,
+                                        prefix=".live-update-", suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump({"version": version, "package": str(package)}, stream, separators=(",", ":"))
+            stream.flush()
+        temporary.replace(request)
+    finally:
+        if temporary and temporary.exists():
+            temporary.unlink()
+    return request
+
+
+def read_request(home):
+    request = request_path(home)
+    if not request.is_file() or request.is_symlink():
+        return None
+    try:
+        payload = json.loads(request.read_text(encoding="utf-8"))
+        if set(payload) != {"version", "package"}:
+            raise ValueError("invalid fields")
+        version = payload["version"]
+        if not _valid_version(version):
+            raise ValueError("invalid version")
+        package = _trusted_staged(home, payload["package"])
+        package_name = package.name
+        if package_name != f"STEVE-{version}" and not package_name.startswith(f"STEVE-{version}-"):
+            raise ValueError("package version does not match request")
+        manifest = json.loads((package / "STEVE" / "STEVE.manifest").read_text(encoding="utf-8"))
+        if manifest.get("version") != version:
+            raise ValueError("package manifest version does not match request")
+        return {"version": version, "package": str(package)}
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"The live update request is invalid: {exc}") from exc
+
+
+def find_steve_program(programs, expected_path=None):
+    """Return exactly one valid STEVE API program, optionally path-bound."""
+    matches = []
+    for program in programs or ():
+        if not getattr(program, "isValid", False) or getattr(program, "name", None) != "STEVE":
+            continue
+        if expected_path is not None:
+            location = getattr(program, "location", None)
+            if location is None:
+                continue
+            location_path = Path(str(location))
+            expected = Path(expected_path)
+            if location_path.is_symlink() or expected.is_symlink():
+                continue
+            if location_path.resolve() != expected.resolve():
+                continue
+        matches.append(program)
+    return matches[0] if len(matches) == 1 else None
+
+
+def purge_steve_modules(modules=None):
+    """Remove only STEVE package modules before Fusion calls the new run()."""
+    modules = sys.modules if modules is None else modules
+    for name in list(modules):
+        if name == "STEVE" or name == "steve" or name.startswith("steve."):
+            modules.pop(name, None)
+
+
+def swap_staged_addin(package, installed, expected_version):
+    """Replace only the STEVE folder and return a rollback callback."""
+    package = Path(package).resolve()
+    installed = Path(installed).resolve()
+    source = package / "STEVE"
+    manifest = source / "STEVE.manifest"
+    if not source.is_dir() or not manifest.is_file():
+        raise ValueError("The staged update does not contain a STEVE add-in.")
+    metadata = json.loads(manifest.read_text(encoding="utf-8"))
+    if metadata.get("version") != expected_version:
+        raise ValueError("The staged add-in version does not match the update request.")
+    if installed.name != "STEVE" or installed.parent == installed:
+        raise ValueError("The installed STEVE path is invalid.")
+    backup = installed.with_name(f".STEVE-rollback-{uuid4().hex}")
+    installed.rename(backup)
+    try:
+        shutil.copytree(source, installed, ignore=shutil.ignore_patterns("STEVEUpdater"))
+    except Exception:
+        if installed.exists():
+            shutil.rmtree(installed, ignore_errors=True)
+        backup.rename(installed)
+        raise
+
+    def rollback():
+        if installed.exists():
+            shutil.rmtree(installed, ignore_errors=True)
+        if backup.exists() and not installed.exists():
+            backup.rename(installed)
+
+    return rollback
+
+
+def apply_in_fusion(programs, package, installed, swap, expected_version, modules=None, installed_version=None):
+    """Stop, swap, reload and verify one managed add-in.
+
+    ``swap`` must replace ``installed`` from ``package`` and return a rollback
+    callable. The Autodesk-facing helper owns the API program collection and
+    invokes this on Fusion's main thread. ``installed_version`` is an optional
+    post-run manifest reader used to prove the new code is active.
+    """
+    program = find_steve_program(programs, installed)
+    if program is None:
+        raise RuntimeError("Could not identify the running STEVE add-in safely.")
+    if not getattr(program, "isRunning", True):
+        raise RuntimeError("STEVE is not running; restart Fusion to apply this update.")
+    program.stop()
+    if getattr(program, "isRunning", False):
+        raise RuntimeError("Fusion did not stop STEVE; restart Fusion to apply this update.")
+    rollback = swap(package, installed, expected_version)
+    try:
+        purge_steve_modules(modules)
+        program.run()
+        if not getattr(program, "isRunning", False):
+            raise RuntimeError("Fusion did not restart STEVE; restart Fusion to apply this update.")
+        if installed_version is not None and installed_version() != expected_version:
+            raise RuntimeError("Fusion restarted STEVE but the expected version is not active; restart Fusion to apply this update.")
+    except Exception:
+        rollback()
+        purge_steve_modules(modules)
+        try:
+            program.run()
+        except Exception:
+            pass
+        raise
+    return expected_version
