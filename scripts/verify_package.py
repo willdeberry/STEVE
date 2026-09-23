@@ -46,10 +46,11 @@ def main():
         expected, relative = line.split("  ", 1)
         assert relative not in payload_names, "Duplicate payload entry"
         payload_names.add(relative)
-        installed_relative = relative
-        if relative.startswith("STEVE/STEVEUpdater/"):
-            installed_relative = relative.replace("STEVE/STEVEUpdater/", "STEVEUpdater/", 1)
-        assert digest((destination / installed_relative)) == expected, f"Installed file mismatch: {relative}"
+        if relative.startswith("STEVEUpdater/"):
+            installed_path = destination / "STEVEUpdater" / relative.removeprefix("STEVEUpdater/")
+        else:
+            installed_path = destination / "STEVE" / relative
+        assert digest(installed_path) == expected, f"Installed file mismatch: {relative}"
         files += 1
     # Ensure the archive contains this checkout's current add-ins, not an older build.
     source = ROOT / "addin/STEVE"
@@ -67,9 +68,9 @@ def main():
             assert digest(path) == digest(installed / relative), "Stale license file"
     for path in helper_source.rglob("*"):
         if path.is_file() and path.suffix not in (".pyc", ".pyo"):
-            relative = "STEVE/STEVEUpdater/" + path.relative_to(helper_source).as_posix()
+            relative = "STEVEUpdater/" + path.relative_to(helper_source).as_posix()
             expected_names.add(relative)
-            installed_helper = destination / relative.replace("STEVE/STEVEUpdater/", "STEVEUpdater/", 1)
+            installed_helper = destination / relative
             assert digest(installed_helper) == digest(path), f"Stale helper package: {path}"
     assert (destination / "STEVEUpdater" / "STEVEUpdater.py").is_file(), "Missing installed STEVEUpdater"
     assert payload_names == expected_names, "Package has missing or obsolete payload files"

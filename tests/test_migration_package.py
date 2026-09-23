@@ -37,6 +37,12 @@ class MigrationPackageTests(unittest.TestCase):
         # AddIns/STEVEUpdater.
         self.assertTrue(helper.is_dir())
 
+    def test_verifier_maps_archive_entries_to_promoted_install_layout(self):
+        verifier = (ROOT / "scripts" / "verify_package.py").read_text(encoding="utf-8")
+        self.assertIn('destination / "STEVE" / relative', verifier)
+        self.assertIn('destination / "STEVEUpdater" / relative.removeprefix("STEVEUpdater/")', verifier)
+        self.assertNotIn('relative.replace("STEVE/STEVEUpdater/", "STEVEUpdater/", 1)', verifier)
+
 
 if __name__ == "__main__":
     unittest.main()
