@@ -163,9 +163,9 @@ jobs:
             echo "An unfinished release exists for $tag. Inspect it before retrying." >&2
             exit 1
           fi
-          main_sha="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
-          if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
-            echo 'Main changed during validation; the newer main build will publish.'
+          branch_sha="$(gh api "repos/$GH_REPO/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)"
+          if [[ "$branch_sha" != "$GITHUB_SHA" ]]; then
+            echo 'The validated branch changed during the build; a newer run will publish.'
             exit 0
           fi
           (cd dist && sha256sum --check "STEVE-$RELEASE_VERSION-windows-x64.zip.sha256" "STEVE-$RELEASE_VERSION-macos-arm64.zip.sha256")
