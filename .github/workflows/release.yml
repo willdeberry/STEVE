@@ -52,7 +52,8 @@ jobs:
           $result = $LASTEXITCODE
           Write-Output $output
           if ($result -ne 0) {
-            $summary = ($output -split '\r?\n' | Select-Object -Last 45) -join ' | '
+            $summary = ($output -split '\r?\n' | Where-Object { $_ -match '^(ERROR|FAIL):|^FAILED \(|^Ran \d+ tests|^  File |^[A-Za-z][A-Za-z0-9_.]*Error:|^AssertionError:' } | Select-Object -Last 25) -join ' | '
+            if (-not $summary) { $summary = ($output -split '\r?\n' | Select-Object -Last 8) -join ' | ' }
             $summary = $summary.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
             Write-Output "::error title=Windows test failure::$summary"
             exit $result
