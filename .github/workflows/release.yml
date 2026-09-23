@@ -102,27 +102,8 @@ jobs:
         run: python scripts/fetch_runtime.py
       - name: Build package with installer script; audit source and binaries
         run: python scripts/build_package.py
-      - name: Test Python and installer behavior diagnostics
-        id: python_tests_diagnostic
-        continue-on-error: true
-        shell: bash
-        run: |
-          set +e
-          python -m unittest discover -s tests -v 2>&1 | tee macos-unittest.log
-          status=${PIPESTATUS[0]}
-          if [[ "$status" -ne 0 ]]; then
-            summary="$(grep -E '^(FAIL|ERROR):|^FAILED|^Ran ' macos-unittest.log | tr '\n' ' ' | cut -c1-3500)"
-            summary="${summary//%/%25}"
-            summary="${summary//$'\r'/%0D}"
-            summary="${summary//$'\n'/%0A}"
-            echo "::error title=macOS unittest failure::$summary"
-          fi
-          exit "$status"
-      - name: Report macOS test failure
-        if: steps.python_tests_diagnostic.outcome == 'failure'
-        run: |
-          echo 'The macOS Python/installer test step failed; see the annotated failure above.'
-          exit 1
+      - name: Test Python and installer behavior
+        run: python -m unittest discover -s tests -v
       - name: Test chat rendering
         run: node tests/test_panel.cjs
       - name: Test image attachments
