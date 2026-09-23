@@ -136,7 +136,7 @@ jobs:
   publish:
     name: Publish verified preview
     needs: [windows, macos]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || (github.ref == 'refs/heads/test/updater-build' && needs.windows.outputs.version == '0.4.2' && needs.macos.outputs.version == '0.4.2'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
@@ -173,9 +173,10 @@ jobs:
             echo "An unfinished release exists for $tag. Inspect it before retrying." >&2
             exit 1
           fi
-          main_sha="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
-          if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
-            echo 'Main changed during validation; the newer main build will publish.'
+          branch="${GITHUB_REF#refs/heads/}"
+          branch_sha="$(gh api "repos/$GH_REPO/git/ref/heads/$branch" --jq .object.sha)"
+          if [[ "$branch_sha" != "$GITHUB_SHA" ]]; then
+            echo "$branch changed during validation; only a build from the current branch may publish."
             exit 0
           fi
           (cd dist && sha256sum --check "STEVE-$RELEASE_VERSION-windows-x64.zip.sha256" "STEVE-$RELEASE_VERSION-macos-arm64.zip.sha256")
@@ -187,6 +188,10 @@ jobs:
             echo "$tag already points to another commit; published versions cannot be reused." >&2
             exit 1
           fi
+          notes=(--notes-file docs/RELEASE_NOTES.md)
+          if [[ "$branch" == 'test/updater-build' ]]; then
+            notes=(--notes 'Disposable fork-only 0.4.2 update test. Install it using Update STEVE in the fork-aware 0.4.1 build; do not submit these test-release settings upstream.')
+          fi
           gh release create "$tag" \
             "dist/STEVE-$RELEASE_VERSION-windows-x64.zip" \
             "dist/STEVE-$RELEASE_VERSION-windows-x64.zip.sha256" \
@@ -194,4 +199,4 @@ jobs:
             "dist/STEVE-$RELEASE_VERSION-macos-arm64.zip.sha256" \
             --verify-tag --prerelease \
             --title "STEVE $RELEASE_VERSION — Windows and macOS preview" \
-            --notes-file docs/RELEASE_NOTES.md
+            "${notes[@]}"
