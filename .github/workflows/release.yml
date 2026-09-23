@@ -47,7 +47,16 @@ jobs:
       - name: Build EXE and portable package; audit source and binaries
         run: python scripts/build_package.py
       - name: Test Python and installer behavior
-        run: python -m unittest discover -s tests -v
+        run: |
+          $output = python -m unittest discover -s tests -v 2>&1 | Out-String
+          $result = $LASTEXITCODE
+          Write-Output $output
+          if ($result -ne 0) {
+            $summary = ($output -split '\r?\n' | Select-Object -Last 45) -join ' | '
+            $summary = $summary.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Windows test failure::$summary"
+            exit $result
+          }
       - name: Test chat rendering
         run: node tests/test_panel.cjs
       - name: Test image attachments
