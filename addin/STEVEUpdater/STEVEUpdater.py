@@ -22,7 +22,7 @@ from update_core import (  # noqa: E402
     recover_journal,
 )
 
-ENABLED = False
+ENABLED = True
 POLL_SECONDS = 1.0
 EVENT_ID = "10X_STEVE_Updater"
 STEVE_NAME = "STEVE"

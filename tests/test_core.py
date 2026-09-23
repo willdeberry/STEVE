@@ -391,7 +391,8 @@ class ControllerTests(unittest.TestCase):
 
     def test_install_update_requires_matching_verified_download_and_stages_on_worker(self):
         self.controller.state["updateInfo"] = {"version": "0.5.0"}
-        with patch("steve.controller.stage_update") as stage, patch("steve.controller.launch_update") as launch:
+        with patch("steve.controller.stage_update") as stage, patch("steve.controller.launch_update") as launch, \
+             patch("steve.controller.LIVE_UPDATE_ENABLED", False):
             self.controller.dispatch("installUpdate")
             eventually(lambda: "Download" in self.controller.snapshot()["updateStatus"])
             stage.assert_not_called()
@@ -425,7 +426,8 @@ class ControllerTests(unittest.TestCase):
         self.controller.state["updateInfo"] = release
         with patch.object(self.controller.downloader, "request") as download, \
              patch("steve.controller.stage_update", return_value=Path("/staged")) as stage, \
-             patch("steve.controller.launch_update") as launch:
+             patch("steve.controller.launch_update") as launch, \
+             patch("steve.controller.LIVE_UPDATE_ENABLED", False):
             self.controller.dispatch("updateSteve")
             eventually(lambda: download.called)
             download.assert_called_once_with(release)
