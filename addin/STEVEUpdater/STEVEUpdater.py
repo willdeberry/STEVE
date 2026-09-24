@@ -66,13 +66,6 @@ def _request_key():
 def _signal_worker():
     while _stop_event and not _stop_event.wait(POLL_SECONDS):
         try:
-            write_ready(data_home())
-        except Exception:
-            pass
-        key = _request_key()
-        if key is None or key == _last_request:
-            continue
-        try:
             _app_instance.fireCustomEvent(EVENT_ID)
         except RuntimeError:
             return
@@ -113,6 +106,11 @@ def _apply_pending():
 
 class UpdateEvent(adsk.core.CustomEventHandler):
     def notify(self, args):
+        try:
+            write_ready(data_home())
+        except Exception:
+            _log("custom event callback ran but readiness could not be recorded")
+            return
         _apply_pending()
 
 
@@ -128,7 +126,6 @@ def run(context):
     _event_handler = UpdateEvent()
     _custom_event = _app_instance.registerCustomEvent(EVENT_ID)
     _custom_event.add(_event_handler)
-    write_ready(data_home())
     _worker = threading.Thread(target=_signal_worker, name="STEVEUpdater-watch", daemon=True)
     _worker.start()
     _apply_pending()
@@ -136,14 +133,14 @@ def run(context):
 
 def stop(context):
     global _app_instance, _event_handler, _custom_event, _stop_event, _worker, _last_request
-    try:
-        clear_ready(data_home())
-    except Exception:
-        pass
     if _stop_event:
         _stop_event.set()
     if _worker and _worker is not threading.current_thread():
         _worker.join(timeout=2)
+    try:
+        clear_ready(data_home())
+    except Exception:
+        pass
     if _custom_event and _event_handler:
         try:
             _custom_event.remove(_event_handler)

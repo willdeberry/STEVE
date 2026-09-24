@@ -172,6 +172,7 @@ class Controller:
                       "accountChecked": False, "localStatus": "", "providerVersion": "", "error": "", "status": "Checking your account", "version": VERSION,
                       "updateInfo": None, "updateChecking": False, "updateStatus": "", "updateDownload": None,
                       "updateInstalling": False, "updateInstallReady": False, "autoInstallVersion": None,
+                      "updaterReady": False,
                       "updateInstallFailure": previous_install_result(self.debug.folder.parent, VERSION),
                       "codexVersion": "", "codexManaged": False, "codexUpdateInfo": None,
                       "codexUpdateChecking": False, "codexUpdateStatus": "", "codexUpdating": False, "codexPendingVersion": "", "codexRestarting": False,
@@ -230,7 +231,7 @@ class Controller:
 
     def snapshot(self):
         with self._lock:
-            return {**copy.deepcopy(self.state), "turnId": self.turn_id,
+            return {**copy.deepcopy(self.state), "updaterReady": live_update_ready(self.debug.folder.parent), "turnId": self.turn_id,
                     "activeTools": [dict(entry[3]) for entry in self._active_tools.values()
                                     if self.state["busy"] and entry[:3] == (self.client, self.thread_id, self.turn_id)],
                     "canSteer": bool(self.turn_id and self.state["busy"] and not self._cancel)}
