@@ -48,6 +48,17 @@ jobs:
         run: python scripts/build_package.py
       - name: Test Python and installer behavior
         run: python -m unittest discover -s tests -v
+      - name: Diagnose Windows unittest failure
+        if: ${{ failure() }}
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'steve-tests.log'
+          python -m unittest discover -s tests -v *> $log
+          $status = $LASTEXITCODE
+          Get-Content $log | Select-String '^(ERROR|FAIL):|^FAILED|^Ran ' | ForEach-Object {
+            "::error title=Windows unittest result::$($_.Line)"
+          }
+          Get-Content $log -Tail 160
+          exit 0
       - name: Test chat rendering
         run: node tests/test_panel.cjs
       - name: Test image attachments
