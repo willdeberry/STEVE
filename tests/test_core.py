@@ -391,8 +391,7 @@ class ControllerTests(unittest.TestCase):
 
     def test_install_update_requires_matching_verified_download_and_stages_on_worker(self):
         self.controller.state["updateInfo"] = {"version": "0.5.0"}
-        with patch("steve.controller.stage_update") as stage, patch("steve.controller.launch_update") as launch, \
-             patch("steve.controller.LIVE_UPDATE_ENABLED", False):
+        with patch("steve.controller.stage_update") as stage, patch("steve.controller.launch_update") as launch:
             self.controller.dispatch("installUpdate")
             eventually(lambda: "Download" in self.controller.snapshot()["updateStatus"])
             stage.assert_not_called()
@@ -407,13 +406,13 @@ class ControllerTests(unittest.TestCase):
             self.assertIn("quit Fusion", self.controller.snapshot()["updateStatus"])
             self.assertIn("Restart Fusion", self.controller.snapshot()["updateStatus"])
 
-    def test_feature_gated_live_update_publishes_request_without_launching_installer(self):
+    def test_default_live_update_publishes_request_when_helper_is_ready(self):
         self.controller.state["updateInfo"] = {"version": "0.5.0"}
         self.controller.state["updateDownload"] = {"state": "ready", "version": "0.5.0", "path": "/verified.zip", "sha256": "a" * 64}
         with patch("steve.controller.stage_update", return_value=Path("/staged")) as stage, \
              patch("steve.controller.launch_update") as launch, \
              patch("steve.controller.write_live_update_request") as request, \
-             patch("steve.controller.LIVE_UPDATE_ENABLED", True):
+             patch("steve.controller.live_update_ready", return_value=True):
             self.controller.dispatch("installUpdate")
             eventually(lambda: request.called)
             self.assertEqual(stage.call_args.args[0], Path("/verified.zip"))
@@ -421,13 +420,25 @@ class ControllerTests(unittest.TestCase):
             launch.assert_not_called()
             self.assertIn("in-Fusion", self.controller.snapshot()["updateStatus"])
 
+    def test_live_update_falls_back_when_helper_is_not_ready(self):
+        self.controller.state["updateInfo"] = {"version": "0.5.0"}
+        self.controller.state["updateDownload"] = {"state": "ready", "version": "0.5.0", "path": "/verified.zip", "sha256": "a" * 64}
+        with patch("steve.controller.stage_update", return_value=Path("/staged")), \
+             patch("steve.controller.launch_update") as launch, \
+             patch("steve.controller.write_live_update_request") as request, \
+             patch("steve.controller.live_update_ready", return_value=False):
+            self.controller.dispatch("installUpdate")
+            eventually(lambda: launch.called)
+            launch.assert_called_once_with(Path("/staged"))
+            request.assert_not_called()
+            self.assertIn("quit Fusion", self.controller.snapshot()["updateStatus"])
+
     def test_one_click_update_downloads_then_installs_only_matching_verified_release(self):
         release = {"version": "0.5.0"}
         self.controller.state["updateInfo"] = release
         with patch.object(self.controller.downloader, "request") as download, \
              patch("steve.controller.stage_update", return_value=Path("/staged")) as stage, \
-             patch("steve.controller.launch_update") as launch, \
-             patch("steve.controller.LIVE_UPDATE_ENABLED", False):
+             patch("steve.controller.launch_update") as launch:
             self.controller.dispatch("updateSteve")
             eventually(lambda: download.called)
             download.assert_called_once_with(release)

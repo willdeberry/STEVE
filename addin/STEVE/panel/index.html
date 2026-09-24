@@ -137,8 +137,8 @@
   <dialog id="image-viewer" class="image-viewer"><button id="close-image" type="button" aria-label="Close image">×</button><img id="expanded-image" alt="Reference image"></dialog>
   <dialog id="update-confirm" class="goal-dialog" aria-labelledby="update-confirm-heading">
     <h2 id="update-confirm-heading">Install STEVE update?</h2>
-    <p>STEVE will download the newest release for your platform, verify it, and stage it. Wait for “Update queued,” then save your work and quit Fusion; the installer will replace only your managed STEVE add-in, keep a backup, and leave your account data intact. Reopen Fusion afterward. Fusion will not be closed automatically.</p>
-    <div class="goal-actions"><button id="confirm-update" type="button" class="primary-button">Download and install after Fusion closes</button><button id="cancel-update" type="button" class="secondary-button">Cancel</button></div>
+    <p id="update-confirm-message">STEVE will download and verify the newest release. STEVEUpdater will apply it while Fusion remains open when its lifecycle bridge is ready; otherwise the verified fallback installer will apply it after you quit Fusion. Your account data stays intact.</p>
+    <div class="goal-actions"><button id="confirm-update" type="button" class="primary-button">Download and update STEVE</button><button id="cancel-update" type="button" class="secondary-button">Cancel</button></div>
   </dialog>
   <dialog id="goal-dialog" class="goal-dialog" aria-labelledby="goal-heading">
     <div class="goal-heading"><div><span class="eyebrow">KEEP WORKING TOWARD AN OUTCOME</span><h2 id="goal-heading">Your goal</h2></div><button id="goal-close" type="button" class="icon-button" aria-label="Close goal controls">×</button></div>

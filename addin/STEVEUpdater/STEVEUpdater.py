@@ -1,9 +1,8 @@
 """Fusion add-in lifecycle helper.
 
 This helper is installed beside STEVE and is intentionally independent of
-STEVE's Python modules. The first migration release only installs it; the
-live-update request path is disabled until a later release is validated in
-Fusion.
+STEVE's Python modules. It owns the default in-Fusion update path whenever
+its runtime heartbeat is fresh; the detached installer remains the fallback.
 """
 from pathlib import Path
 import importlib.util
@@ -26,8 +25,9 @@ apply_in_fusion = _core.apply_in_fusion
 data_home = _core.data_home
 read_request = _core.read_request
 recover_journal = _core.recover_journal
+write_ready = _core.write_ready
+clear_ready = _core.clear_ready
 
-ENABLED = True
 POLL_SECONDS = 1.0
 EVENT_ID = "10X_STEVE_Updater"
 STEVE_NAME = "STEVE"
@@ -65,6 +65,10 @@ def _request_key():
 
 def _signal_worker():
     while _stop_event and not _stop_event.wait(POLL_SECONDS):
+        try:
+            write_ready(data_home())
+        except Exception:
+            pass
         key = _request_key()
         if key is None or key == _last_request:
             continue
@@ -114,9 +118,6 @@ class UpdateEvent(adsk.core.CustomEventHandler):
 
 def run(context):
     global _app_instance, _event_handler, _custom_event, _stop_event, _worker
-    if not ENABLED:
-        _log("installed; in-Fusion updates are disabled pending live validation")
-        return
     try:
         recover_journal(data_home())
     except Exception:
@@ -127,6 +128,7 @@ def run(context):
     _event_handler = UpdateEvent()
     _custom_event = _app_instance.registerCustomEvent(EVENT_ID)
     _custom_event.add(_event_handler)
+    write_ready(data_home())
     _worker = threading.Thread(target=_signal_worker, name="STEVEUpdater-watch", daemon=True)
     _worker.start()
     _apply_pending()
@@ -134,6 +136,10 @@ def run(context):
 
 def stop(context):
     global _app_instance, _event_handler, _custom_event, _stop_event, _worker, _last_request
+    try:
+        clear_ready(data_home())
+    except Exception:
+        pass
     if _stop_event:
         _stop_event.set()
     if _worker and _worker is not threading.current_thread():

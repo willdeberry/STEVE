@@ -10,9 +10,11 @@ import platform
 import shutil
 import sys
 import tempfile
+import time
 from uuid import uuid4
 
 REQUEST_NAME = "live-update.json"
+READY_NAME = "steve-updater-ready.json"
 JOURNAL_NAME = "live-update-journal.json"
 
 
@@ -72,6 +74,32 @@ def update_journal(home, phase, **changes):
 
 def clear_journal(home):
     _journal_path(home).unlink(missing_ok=True)
+
+
+def ready_path(home):
+    return Path(home) / "pending-updates" / READY_NAME
+
+
+def write_ready(home):
+    path = ready_path(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(path, {"pid": os.getpid(), "timestamp": time.time()})
+    return path
+
+
+def clear_ready(home):
+    ready_path(home).unlink(missing_ok=True)
+
+
+def ready(home, max_age=5.0):
+    try:
+        path = ready_path(home)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        timestamp = payload["timestamp"]
+        return (isinstance(payload.get("pid"), int) and isinstance(timestamp, (int, float))
+                and time.time() - timestamp <= max_age)
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return False
 
 
 def recover_journal(home):

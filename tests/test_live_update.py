@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "addin/STEVE"))
@@ -13,12 +14,16 @@ from update_core import (  # noqa: E402
     swap_staged_addin as core_swap_staged_addin,
     begin_journal,
     clear_journal,
+    clear_ready,
     load_journal,
+    ready_path,
     recover_journal,
     update_journal,
+    write_ready,
 )
 from steve.live_update import (
     find_steve_program,
+    live_update_ready,
     purge_steve_modules,
     read_request,
     request_path,
@@ -48,6 +53,19 @@ class Program:
 
 
 class LiveUpdateTests(unittest.TestCase):
+    def test_helper_readiness_accepts_fresh_heartbeat_and_rejects_absent_or_stale(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / "home"
+            self.assertFalse(live_update_ready(home))
+            write_ready(home)
+            self.assertTrue(live_update_ready(home))
+            payload = json.loads(ready_path(home).read_text(encoding="utf-8"))
+            payload["timestamp"] = time.time() - 10
+            ready_path(home).write_text(json.dumps(payload), encoding="utf-8")
+            self.assertFalse(live_update_ready(home))
+            clear_ready(home)
+            self.assertFalse(ready_path(home).exists())
+
     def test_request_is_atomic_and_round_trips_only_staged_paths(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp) / "home"

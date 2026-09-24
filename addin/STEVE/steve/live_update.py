@@ -9,9 +9,29 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import time
 from uuid import uuid4
 
+from .transport import data_home
+
 REQUEST_NAME = "live-update.json"
+READY_NAME = "steve-updater-ready.json"
+
+
+def ready_path(home):
+    return Path(home) / "pending-updates" / READY_NAME
+
+
+def live_update_ready(home=None, max_age=5.0):
+    """Return true only while the sibling helper's Fusion bridge is fresh."""
+    try:
+        path = ready_path(home or data_home())
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        timestamp = payload["timestamp"]
+        return (isinstance(payload.get("pid"), int) and isinstance(timestamp, (int, float))
+                and time.time() - timestamp <= max_age)
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return False
 
 
 def request_path(home):

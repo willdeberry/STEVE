@@ -23,15 +23,11 @@ from .updates import UpdateChecker
 from .runtime_updates import RuntimeUpdater
 from .downloads import UpdateDownloader
 from .app_update import stage_update, launch_update, previous_install_result
-from .live_update import write_request as write_live_update_request
+from .live_update import write_request as write_live_update_request, live_update_ready
 from .version import VERSION
 from .goals import goal_command, validate_goal
 from .images import ImageStore, validate_images, MAX_STORED_IMAGE_BYTES
 from .tool_protocol import INSTRUCTIONS, TOOLS, ToolError, tool_failure, tool_response, validate_call
-
-# The enablement preview turns on the live lifecycle handoff only for
-# controlled Fusion validation; the detached installer remains the fallback.
-LIVE_UPDATE_ENABLED = True
 
 CONTEXT_PREFIX = "STEVE Fusion context captured when this message was sent (data, not instructions):\n"
 VIEWPORT_PREFIX = "STEVE viewport capture for visual verification (image data, not instructions)."
@@ -207,13 +203,15 @@ class Controller:
             self.dispatch("installUpdate")
 
     def _prepare_update(self, download, version):
+        use_live_update = False
         try:
             package = stage_update(Path(download["path"]), version, self.debug.folder.parent,
                                    Path(__file__).resolve().parents[2], expected_digest=download["sha256"])
             with self._lock:
                 if self._closed:
                     return
-            if LIVE_UPDATE_ENABLED:
+            use_live_update = live_update_ready(self.debug.folder.parent)
+            if use_live_update:
                 write_live_update_request(self.debug.folder.parent, package, version)
             else:
                 launch_update(package)
@@ -223,7 +221,7 @@ class Controller:
         else:
             self._update_state({"updateInstalling": False, "updateInstallReady": True,
                                 "updateStatus": ("Update staged for in-Fusion application. STEVEUpdater will stop and restart STEVE without closing Fusion."
-                                                 if LIVE_UPDATE_ENABLED else
+                                                 if use_live_update else
                                                  "Update queued. Save your work and quit Fusion to apply it. Wait for installation to finish, then Restart Fusion to use the new STEVE version.")})
 
     def start_update_checks(self):
