@@ -110,7 +110,7 @@ class LiveUpdateTests(unittest.TestCase):
         self.assertIsNone(find_steve_program([program], "/addins/STEVE"))
 
         with tempfile.TemporaryDirectory() as temp:
-            expected = Path(temp) / "AddIns" / "STEVE"
+            expected = Path(temp).resolve() / "AddIns" / "STEVE"
             expected.mkdir(parents=True)
             program = Program(location=0)
             program.folder = str(expected)
@@ -137,7 +137,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_parent_symlinks_are_rejected_by_both_identity_checks(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             real_parent = root / "real-parent"
             real_parent.mkdir()
             linked_parent = root / "linked-parent"
@@ -155,7 +155,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_final_and_dangling_symlinks_are_rejected_by_both_identity_checks(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             real = root / "real"
             real.mkdir()
             expected = real / "STEVE"
@@ -196,7 +196,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_swap_keeps_lifecycle_helper_outside_steve(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             (source / "STEVEUpdater").mkdir(parents=True)
@@ -227,7 +227,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_staged_extra_file_or_link_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             source.mkdir(parents=True)
@@ -282,7 +282,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_nested_directories_are_allowed_during_staged_verification(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             (source / "steve" / "panel").mkdir(parents=True)
@@ -306,7 +306,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_staged_symlink_is_rejected_before_stop(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             source.mkdir(parents=True)
@@ -327,7 +327,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_apply_writes_confirmed_journal_after_new_version_is_active(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             source.mkdir(parents=True)
@@ -374,7 +374,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_recover_journal_restores_backup_for_unconfirmed_transaction(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             home = root / "home"
             installed = root / "AddIns" / "STEVE"
             backup = root / "AddIns" / ".STEVE-rollback-test"
@@ -388,7 +388,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_recover_journal_clears_confirmed_transaction_without_touching_install(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             home = root / "home"
             installed = root / "AddIns" / "STEVE"
             installed.mkdir(parents=True)
@@ -400,7 +400,7 @@ class LiveUpdateTests(unittest.TestCase):
             self.assertIsNone(load_journal(home))
 
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             source.mkdir(parents=True)
@@ -426,7 +426,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_staged_checksum_tampering_is_rejected_before_swap(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             package = root / "pending-updates" / "STEVE-0.5.0"
             source = package / "STEVE"
             source.mkdir(parents=True)
