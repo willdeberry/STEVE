@@ -246,11 +246,18 @@ def verify_staged(package, expected_version):
     actual_files = set()
     for path in source.rglob("*"):
         relative = path.relative_to(source).as_posix()
-        if path.is_symlink() or not path.is_file():
-            raise ValueError("The staged update contains an unexpected file.")
+        if path.is_symlink():
+            raise ValueError(f"The staged update contains an unexpected symlink: {relative}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise ValueError(f"The staged update contains an unexpected entry: {relative}")
         actual_files.add(relative)
-    if actual_files != listed:
-        raise ValueError("The staged update contains an unexpected file.")
+    missing = listed - actual_files
+    extra = actual_files - listed
+    if missing or extra:
+        detail = f"missing={sorted(missing)} extra={sorted(extra)}"
+        raise ValueError(f"The staged update file list differs from SHA256SUMS: {detail}")
 
 
 def find_steve_program(programs, expected_path=None):

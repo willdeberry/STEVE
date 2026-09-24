@@ -149,6 +149,8 @@ html, html body {
 #goal-summary { font-size:12px; line-height:1.6; overflow-wrap:anywhere; max-height:110px; overflow:auto; }
 .goal-note { color:#a5b6ac; font-size:11px; line-height:1.5; }
 .goal-actions { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0; }
+#update-confirm .goal-actions { flex-wrap:nowrap; }
+#update-confirm .goal-actions > button { flex:1 1 0; min-width:0; }
 #goal-form { display:flex; flex-direction:column; gap:8px; }
 #goal-form label { font-size:12px; color:#d5dfd7; }
 #goal-objective, #goal-budget { box-sizing:border-box; width:100%; background:#101916; border:1px solid #4a6053; border-radius:8px; padding:10px; color:#e3e8df; font:12px/1.5 inherit; }

@@ -232,6 +232,30 @@ class LiveUpdateTests(unittest.TestCase):
                     sys.modules[name] = value
         self.assertTrue(module)
 
+    def test_nested_directories_are_allowed_during_staged_verification(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            package = root / "pending-updates" / "STEVE-0.5.0"
+            source = package / "STEVE"
+            (source / "steve" / "panel").mkdir(parents=True)
+            (source / "STEVE.manifest").write_text('{"version":"0.5.0"}')
+            (source / "STEVE.py").write_text("new")
+            (source / "steve" / "controller.py").write_text("controller")
+            (source / "steve" / "panel" / "index.html").write_text("panel")
+            import hashlib
+            files = [path for path in sorted(source.rglob("*")) if path.is_file()]
+            sums = "\n".join(
+                f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(source).as_posix()}"
+                for path in files
+            ) + "\n"
+            (package / "SHA256SUMS").write_text(sums)
+            installed = root / "AddIns" / "STEVE"
+            installed.mkdir(parents=True)
+            program = Program(location=str(installed))
+            core_apply_in_fusion([program], package, installed, "0.5.0", {}, installed_version=lambda: "0.5.0")
+            self.assertEqual(program.stop_calls, 1)
+            self.assertTrue((installed / "steve" / "panel" / "index.html").is_file())
+
     def test_staged_symlink_is_rejected_before_stop(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
