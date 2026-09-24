@@ -21,6 +21,7 @@ from update_core import (  # noqa: E402
     update_journal,
     version_is_newer,
     write_ready,
+    find_steve_program as core_find_steve_program,
 )
 from steve.live_update import (
     find_steve_program,
@@ -39,6 +40,7 @@ class Program:
         self.name = name
         self.id = program_id
         self.location = location
+        self.folder = location
         self.isValid = True
         self.isRunning = running
         self.stop_calls = 0
@@ -102,25 +104,71 @@ class LiveUpdateTests(unittest.TestCase):
         self.assertIs(find_steve_program([decoy, steve], "expected"), steve)
         self.assertIsNone(find_steve_program([decoy], "expected"))
 
-    def test_path_bound_program_requires_matching_non_symlink_location(self):
+    def test_enum_only_program_is_rejected_without_folder_path(self):
+        program = Program(location=0)
+        program.folder = None
+        self.assertIsNone(find_steve_program([program], "/addins/STEVE"))
+
+        with tempfile.TemporaryDirectory() as temp:
+            expected = Path(temp) / "AddIns" / "STEVE"
+            expected.mkdir(parents=True)
+            program = Program(location=0)
+            program.folder = str(expected)
+            self.assertIs(find_steve_program([program], expected), program)
+
         expected = Path("/addins/STEVE")
         missing = Program()
         mismatched = Program()
-        mismatched.location = "/other/STEVE"
-        linked = Program()
-        linked.location = "/addins/link-to-steve"
-        valid = Program()
-        valid.location = str(expected)
+        mismatched.folder = "/other/STEVE"
+        linked = Program(location=0)
+        linked.folder = "/addins/link-to-steve"
+        valid = Program(location=0)
+        valid.folder = str(expected)
         with tempfile.TemporaryDirectory() as temp:
             real = Path(temp) / "real"
             real.mkdir()
             link = Path(temp) / "link"
             link.symlink_to(real)
-            linked.location = str(link)
+            linked.folder = str(link)
             self.assertIsNone(find_steve_program([missing], expected))
             self.assertIsNone(find_steve_program([mismatched], expected))
             self.assertIsNone(find_steve_program([linked], real))
         self.assertIs(find_steve_program([valid], expected), valid)
+
+    def test_parent_symlinks_are_rejected_by_both_identity_checks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            real_parent = root / "real-parent"
+            real_parent.mkdir()
+            linked_parent = root / "linked-parent"
+            linked_parent.symlink_to(real_parent, target_is_directory=True)
+            expected = real_parent / "AddIns" / "STEVE"
+            expected.mkdir(parents=True)
+            program = Program(location=0)
+            program.folder = str(linked_parent / "AddIns" / "STEVE")
+            self.assertIsNone(find_steve_program([program], expected))
+            self.assertIsNone(core_find_steve_program([program], expected))
+            program.folder = str(expected)
+            linked_expected = linked_parent / "AddIns" / "STEVE"
+            self.assertIsNone(find_steve_program([program], linked_expected))
+            self.assertIsNone(core_find_steve_program([program], linked_expected))
+
+    def test_final_and_dangling_symlinks_are_rejected_by_both_identity_checks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            real = root / "real"
+            real.mkdir()
+            expected = real / "STEVE"
+            expected.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(expected, target_is_directory=True)
+            dangling = root / "dangling"
+            dangling.symlink_to(root / "missing", target_is_directory=True)
+            for folder, target in ((linked, expected), (dangling, expected)):
+                program = Program(location=0)
+                program.folder = str(folder)
+                self.assertIsNone(find_steve_program([program], target))
+                self.assertIsNone(core_find_steve_program([program], target))
 
     def test_read_request_rejects_invalid_version_and_package_version_mismatch(self):
         with tempfile.TemporaryDirectory() as temp:

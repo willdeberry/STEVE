@@ -349,7 +349,7 @@ function renderControls() {
   $("update-status").textContent=state.updateInstallFailure||state.updateStatus||"Checks for new releases automatically.";
   $("updater-status").textContent=state.updaterReady?"STEVEUpdater: Ready (Fusion callback active)":"STEVEUpdater: Not ready";
   $("update-confirm-message").textContent="STEVE will download and verify the newest release. STEVEUpdater will apply it while Fusion remains open when its lifecycle bridge is ready; otherwise the verified fallback installer will apply it after you quit Fusion. Your account data stays intact.";
-  $("confirm-update").textContent="Download and update STEVE";
+  $("confirm-update").textContent="Confirm";
   $("check-updates").disabled=!!state.updateChecking;
   $("check-updates").textContent=state.updateChecking?"Checking…":"Check for updates";
   $("menu-update").hidden=!update;

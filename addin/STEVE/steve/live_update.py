@@ -5,6 +5,7 @@ platform-neutral core for a future helper add-in that owns the Fusion
 stop/swap/run handoff. It deliberately contains no Autodesk imports.
 """
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -100,6 +101,16 @@ def read_request(home):
         raise ValueError(f"The live update request is invalid: {exc}") from exc
 
 
+def _path_has_symlink(path):
+    candidate = Path(path).absolute()
+    current = Path(candidate.anchor)
+    for part in candidate.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            return True
+    return False
+
+
 def find_steve_program(programs, expected_path=None):
     """Return exactly one valid STEVE API program, optionally path-bound."""
     matches = []
@@ -107,14 +118,18 @@ def find_steve_program(programs, expected_path=None):
         if not getattr(program, "isValid", False) or getattr(program, "name", None) != "STEVE":
             continue
         if expected_path is not None:
-            location = getattr(program, "location", None)
-            if location is None:
+            folder = getattr(program, "folder", None)
+            if folder is None:
+                # Compatibility for local stand-ins; Fusion's location is an enum.
+                location = getattr(program, "location", None)
+                if not isinstance(location, (str, os.PathLike)):
+                    continue
+                folder = location
+            if _path_has_symlink(folder) or _path_has_symlink(expected_path):
                 continue
-            location_path = Path(str(location))
+            folder_path = Path(str(folder))
             expected = Path(expected_path)
-            if location_path.is_symlink() or expected.is_symlink():
-                continue
-            if location_path.resolve() != expected.resolve():
+            if folder_path.resolve() != expected.resolve():
                 continue
         matches.append(program)
     return matches[0] if len(matches) == 1 else None

@@ -146,6 +146,7 @@ console.log('Update confirmation controls passed.');
   const input = context.document.getElementById('message');
   input.value = 'Use 8 mm holes';
   context.renderControls();
+  assert.equal(elements.get('confirm-update').textContent, 'Confirm');
   assert.equal(elements.get('send').disabled, true);
   assert.equal(elements.get('stop').hidden, false);
   assert.equal(input.disabled, false);
