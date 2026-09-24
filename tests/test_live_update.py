@@ -391,6 +391,38 @@ class LiveUpdateTests(unittest.TestCase):
         self.assertEqual(program.stop_calls, 1)
         self.assertEqual(program.run_calls, 2)
 
+    def test_failed_live_update_clears_journal_after_filesystem_rollback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            package = root / "pending-updates" / "STEVE-0.5.0"
+            source = package / "STEVE"
+            source.mkdir(parents=True)
+            (source / "STEVE.manifest").write_text('{"version":"0.5.0"}')
+            (source / "STEVE.py").write_text("new")
+            sums = [f"{__import__('hashlib').sha256(path.read_bytes()).hexdigest()}  {path.name}" for path in sorted(source.iterdir())]
+            (package / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+            installed = root / "AddIns" / "STEVE"
+            installed.mkdir(parents=True)
+            (installed / "STEVE.manifest").write_text('{"version":"0.4.0"}')
+            (installed / "old.py").write_text("old")
+            home = root / "home"
+            program = Program(location=str(installed))
+            def broken_run():
+                program.run_calls += 1
+                program.isRunning = False
+            program.run = broken_run
+
+            with self.assertRaisesRegex(RuntimeError, "restart STEVE"):
+                core_apply_in_fusion(
+                    [program], package, installed, "0.5.0", {},
+                    installed_version=lambda: "0.5.0",
+                    journal_home=home,
+                )
+
+            self.assertTrue((installed / "old.py").is_file())
+            self.assertIsNone(load_journal(home))
+            self.assertFalse(recover_journal(home))
+
     def test_journal_is_atomic_and_survives_phase_updates(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp) / "home"

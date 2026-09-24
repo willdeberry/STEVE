@@ -105,6 +105,7 @@ def _apply_pending():
             installed_version=_installed_version,
             journal_home=data_home(),
             programs_provider=lambda: list(_app().scripts.itemsByName(STEVE_NAME) or []),
+            diagnostic=lambda event: _log("lifecycle " + event),
         )
         (data_home() / "pending-updates" / "live-update.json").unlink(missing_ok=True)
         _last_request = key

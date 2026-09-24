@@ -331,7 +331,15 @@ def swap_staged_addin(package, installed, expected_version, journal_home=None):
 
 
 def apply_in_fusion(programs, package, installed, expected_version, modules=None,
-                    installed_version=None, journal_home=None, programs_provider=None):
+                    installed_version=None, journal_home=None, programs_provider=None,
+                    diagnostic=None):
+    def report(event):
+        if diagnostic is not None:
+            try:
+                diagnostic(event)
+            except Exception:
+                pass
+
     verify_staged(package, expected_version)
     program = find_steve_program(programs, installed)
     if program is None:
@@ -353,14 +361,22 @@ def apply_in_fusion(programs, package, installed, expected_version, modules=None
         if programs_provider is not None:
             refreshed = find_steve_program(programs_provider(), installed)
             if refreshed is None:
+                report("fresh-script-missing")
                 raise RuntimeError("Could not reacquire the running STEVE add-in safely.")
             active_program = refreshed
+            report("fresh-script-found")
         if journal_home is not None:
             update_journal(journal_home, "starting")
-        active_program.run()
+        try:
+            active_program.run()
+        except Exception:
+            report("run-raised")
+            raise
         if not getattr(active_program, "isRunning", False):
+            report("run-not-running")
             raise RuntimeError("Fusion did not restart STEVE; restart Fusion to apply this update.")
         if installed_version is not None and installed_version() != expected_version:
+            report("version-not-active")
             raise RuntimeError("Fusion restarted STEVE but the expected version is not active; restart Fusion to apply this update.")
         if journal_home is not None:
             update_journal(journal_home, "confirmed")
@@ -375,6 +391,8 @@ def apply_in_fusion(programs, package, installed, expected_version, modules=None
         except Exception:
             pass
         rollback()
+        if journal_home is not None:
+            clear_journal(journal_home)
         purge_steve_modules(modules)
         try:
             program.run()
