@@ -383,6 +383,11 @@ def apply_in_fusion(programs, package, installed, expected_version, modules=None
         except Exception:
             report("run-raised")
             raise
+        if not getattr(active_program, "isRunning", False) and programs_provider is not None:
+            refreshed = find_steve_program(programs_provider(), installed)
+            if refreshed is not None:
+                active_program = refreshed
+                report("post-run-script-found")
         if not getattr(active_program, "isRunning", False):
             report("run-not-running")
             raise RuntimeError("Fusion did not restart STEVE; restart Fusion to apply this update.")
