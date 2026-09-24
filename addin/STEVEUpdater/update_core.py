@@ -120,6 +120,17 @@ def recover_journal(home):
             or installed.name != "STEVE"):
         raise ValueError("The live update journal contains unsafe recovery paths.")
     if backup.is_symlink() or not backup.is_dir():
+        if (payload.get("phase") == "failed" and not backup.exists()
+                and installed.is_dir() and not installed.is_symlink()
+                and not _path_has_symlink(installed)):
+            try:
+                manifest = json.loads((installed / "STEVE.manifest").read_text(encoding="utf-8"))
+                current_version = manifest.get("version")
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                current_version = None
+            if version_is_newer(current_version, payload.get("expectedVersion")):
+                clear_journal(home)
+                return True
         raise ValueError("The live update backup is missing or unsafe.")
     if installed.exists() or installed.is_symlink():
         raise ValueError("The live update recovery is ambiguous; both installed and backup paths exist.")

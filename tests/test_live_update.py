@@ -436,6 +436,39 @@ class LiveUpdateTests(unittest.TestCase):
             clear_journal(home)
             self.assertIsNone(load_journal(home))
 
+    def test_recover_journal_clears_stale_failed_transaction_after_newer_install(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            home = root / "home"
+            installed = root / "AddIns" / "STEVE"
+            installed.mkdir(parents=True)
+            (installed / "STEVE.manifest").write_text('{"version":"0.5.6"}')
+            begin_journal(home, root / "pending", installed, "0.5.3")
+            update_journal(
+                home,
+                "failed",
+                backup=str(root / "AddIns/.STEVE-rollback-missing"),
+                error="live update failed; recovery is required",
+            )
+
+            self.assertTrue(recover_journal(home))
+            self.assertIsNone(load_journal(home))
+            self.assertTrue((installed / "STEVE.manifest").is_file())
+
+    def test_recover_journal_keeps_failed_transaction_when_version_is_not_newer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            home = root / "home"
+            installed = root / "AddIns" / "STEVE"
+            installed.mkdir(parents=True)
+            (installed / "STEVE.manifest").write_text('{"version":"0.5.2"}')
+            begin_journal(home, root / "pending", installed, "0.5.3")
+            update_journal(home, "failed", backup=str(root / "AddIns/.STEVE-rollback-missing"))
+
+            with self.assertRaisesRegex(ValueError, "missing or unsafe"):
+                recover_journal(home)
+            self.assertIsNotNone(load_journal(home))
+
     def test_recover_journal_restores_backup_for_unconfirmed_transaction(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()
