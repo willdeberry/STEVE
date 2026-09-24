@@ -428,6 +428,36 @@ class LiveUpdateTests(unittest.TestCase):
         self.assertEqual(program.stop_calls, 1)
         self.assertEqual(program.run_calls, 2)
 
+    def test_failed_rollback_keeps_journal_when_old_program_does_not_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            package = root / "pending-updates" / "STEVE-0.5.0"
+            source = package / "STEVE"
+            source.mkdir(parents=True)
+            (source / "STEVE.manifest").write_text('{"version":"0.5.0"}')
+            (source / "STEVE.py").write_text("new")
+            sums = [f"{__import__('hashlib').sha256(path.read_bytes()).hexdigest()}  {path.name}" for path in sorted(source.iterdir())]
+            (package / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+            installed = root / "AddIns" / "STEVE"
+            installed.mkdir(parents=True)
+            (installed / "STEVE.manifest").write_text('{"version":"0.4.0"}')
+            home = root / "home"
+            program = Program(location=str(installed))
+            def broken_run():
+                program.run_calls += 1
+                program.isRunning = False
+            program.run = broken_run
+
+            with self.assertRaisesRegex(RuntimeError, "restart STEVE"):
+                core_apply_in_fusion(
+                    [program], package, installed, "0.5.0", {},
+                    installed_version=lambda: "0.5.0",
+                    journal_home=home,
+                )
+
+            self.assertIsNotNone(load_journal(home))
+            self.assertEqual(load_journal(home)["phase"], "failed")
+
     def test_failed_live_update_clears_journal_after_filesystem_rollback(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()
@@ -444,10 +474,12 @@ class LiveUpdateTests(unittest.TestCase):
             (installed / "old.py").write_text("old")
             home = root / "home"
             program = Program(location=str(installed))
-            def broken_run():
+            attempts = [0]
+            def broken_then_recover():
+                attempts[0] += 1
                 program.run_calls += 1
-                program.isRunning = False
-            program.run = broken_run
+                program.isRunning = attempts[0] > 1
+            program.run = broken_then_recover
 
             with self.assertRaisesRegex(RuntimeError, "restart STEVE"):
                 core_apply_in_fusion(

@@ -407,12 +407,14 @@ def apply_in_fusion(programs, package, installed, expected_version, modules=None
         except Exception:
             pass
         rollback()
-        if journal_home is not None:
-            clear_journal(journal_home)
         purge_steve_modules(modules)
+        rollback_running = False
         try:
             program.run()
+            rollback_running = bool(getattr(program, "isRunning", False))
         except Exception:
-            pass
+            rollback_running = False
+        if journal_home is not None and rollback_running:
+            clear_journal(journal_home)
         raise
     return expected_version
