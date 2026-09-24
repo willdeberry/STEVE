@@ -26,6 +26,7 @@ data_home = _core.data_home
 read_request = _core.read_request
 recover_journal = _core.recover_journal
 write_ready = _core.write_ready
+version_is_newer = _core.version_is_newer
 clear_ready = _core.clear_ready
 
 POLL_SECONDS = 1.0
@@ -37,6 +38,7 @@ _custom_event = None
 _stop_event = None
 _worker = None
 _last_request = None
+_failed_request = None
 
 
 def _app():
@@ -77,14 +79,19 @@ def _installed_version():
 
 
 def _apply_pending():
-    global _last_request
+    global _last_request, _failed_request
     key = _request_key()
-    if key is None or key == _last_request:
+    if key is None or key == _last_request or key == _failed_request:
         return
-    _last_request = key
     try:
         request = read_request(data_home())
         if not request:
+            return
+        current = _installed_version()
+        if not version_is_newer(request["version"], current):
+            (data_home() / "pending-updates" / "live-update.json").unlink(missing_ok=True)
+            _last_request = key
+            _log("ignored stale update request for " + request["version"])
             return
         programs = list(_app().scripts.itemsByName(STEVE_NAME) or [])
         if not programs:
@@ -99,8 +106,11 @@ def _apply_pending():
             journal_home=data_home(),
         )
         (data_home() / "pending-updates" / "live-update.json").unlink(missing_ok=True)
+        _last_request = key
+        _failed_request = None
         _log("updated STEVE to " + request["version"])
     except Exception:
+        _failed_request = key
         _log("update failed; restart Fusion to recover: " + traceback.format_exc())
 
 
@@ -153,3 +163,4 @@ def stop(context):
             pass
     _app_instance = _event_handler = _custom_event = _stop_event = _worker = None
     _last_request = None
+    _failed_request = None

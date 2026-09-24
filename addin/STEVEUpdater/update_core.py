@@ -164,6 +164,12 @@ def _valid_version(version):
             and all(part.isdigit() for part in version.split(".")))
 
 
+def version_is_newer(version, current):
+    if not _valid_version(version) or not _valid_version(current):
+        return False
+    return tuple(int(part) for part in version.split(".")) > tuple(int(part) for part in current.split("."))
+
+
 def write_request(home, package, version):
     if not _valid_version(version):
         raise ValueError("The live update request has an invalid version.")

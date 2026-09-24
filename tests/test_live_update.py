@@ -19,6 +19,7 @@ from update_core import (  # noqa: E402
     ready_path,
     recover_journal,
     update_journal,
+    version_is_newer,
     write_ready,
 )
 from steve.live_update import (
@@ -53,6 +54,12 @@ class Program:
 
 
 class LiveUpdateTests(unittest.TestCase):
+    def test_version_ordering_rejects_equal_older_and_invalid_versions(self):
+        self.assertTrue(version_is_newer("0.4.9", "0.4.8"))
+        self.assertFalse(version_is_newer("0.4.8", "0.4.8"))
+        self.assertFalse(version_is_newer("0.4.7", "0.4.8"))
+        self.assertFalse(version_is_newer("v0.4.9", "0.4.8"))
+
     def test_helper_readiness_accepts_fresh_heartbeat_and_rejects_absent_or_stale(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp) / "home"
