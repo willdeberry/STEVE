@@ -104,6 +104,18 @@ jobs:
         run: python scripts/build_package.py
       - name: Test Python and installer behavior
         run: python -m unittest discover -s tests -v
+      - name: Diagnose macOS unittest failure
+        if: ${{ failure() }}
+        run: |
+          set +e
+          python -m unittest discover -s tests -v > "$RUNNER_TEMP/steve-tests.log" 2>&1
+          status=$?
+          echo "::error title=macOS unittest diagnostic::unittest exit code $status"
+          grep -E '^(ERROR|FAIL):|^FAILED|^Ran ' "$RUNNER_TEMP/steve-tests.log" | while IFS= read -r line; do
+            echo "::error title=macOS unittest result::$line"
+          done
+          tail -n 160 "$RUNNER_TEMP/steve-tests.log"
+          exit 0
       - name: Test chat rendering
         run: node tests/test_panel.cjs
       - name: Test image attachments
