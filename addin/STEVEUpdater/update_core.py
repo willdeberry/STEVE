@@ -331,7 +331,7 @@ def swap_staged_addin(package, installed, expected_version, journal_home=None):
 
 
 def apply_in_fusion(programs, package, installed, expected_version, modules=None,
-                    installed_version=None, journal_home=None):
+                    installed_version=None, journal_home=None, programs_provider=None):
     verify_staged(package, expected_version)
     program = find_steve_program(programs, installed)
     if program is None:
@@ -347,12 +347,18 @@ def apply_in_fusion(programs, package, installed, expected_version, modules=None
     rollback = swap_staged_addin(package, installed, expected_version, journal_home=journal_home)
     if journal_home is not None:
         update_journal(journal_home, "installed")
+    active_program = program
     try:
         purge_steve_modules(modules)
+        if programs_provider is not None:
+            refreshed = find_steve_program(programs_provider(), installed)
+            if refreshed is None:
+                raise RuntimeError("Could not reacquire the running STEVE add-in safely.")
+            active_program = refreshed
         if journal_home is not None:
             update_journal(journal_home, "starting")
-        program.run()
-        if not getattr(program, "isRunning", False):
+        active_program.run()
+        if not getattr(active_program, "isRunning", False):
             raise RuntimeError("Fusion did not restart STEVE; restart Fusion to apply this update.")
         if installed_version is not None and installed_version() != expected_version:
             raise RuntimeError("Fusion restarted STEVE but the expected version is not active; restart Fusion to apply this update.")
@@ -365,7 +371,7 @@ def apply_in_fusion(programs, package, installed, expected_version, modules=None
             except Exception:
                 pass
         try:
-            program.stop()
+            active_program.stop()
         except Exception:
             pass
         rollback()

@@ -343,6 +343,38 @@ class LiveUpdateTests(unittest.TestCase):
                                  installed_version=lambda: "0.5.0")
             self.assertEqual(load_journal(root / "home")["phase"], "confirmed")
 
+    def test_apply_reacquires_script_after_swap_when_pre_stop_object_is_stale(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            package = root / "pending-updates" / "STEVE-0.5.0"
+            source = package / "STEVE"
+            source.mkdir(parents=True)
+            (source / "STEVE.manifest").write_text('{"version":"0.5.0"}')
+            (source / "STEVE.py").write_text("new")
+            sums = [f"{__import__('hashlib').sha256(path.read_bytes()).hexdigest()}  {path.name}" for path in sorted(source.iterdir())]
+            (package / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+            installed = root / "AddIns" / "STEVE"
+            installed.mkdir(parents=True)
+            (installed / "STEVE.manifest").write_text('{"version":"0.4.0"}')
+
+            stale = Program(location=str(installed))
+            replacement = Program(location=str(installed), running=False)
+            def stale_run():
+                stale.run_calls += 1
+                stale.isRunning = False
+            stale.run = stale_run
+            def programs_after_swap():
+                return [replacement]
+
+            core_apply_in_fusion(
+                [stale], package, installed, "0.5.0", {},
+                installed_version=lambda: "0.5.0",
+                programs_provider=programs_after_swap,
+            )
+            self.assertEqual(stale.run_calls, 0)
+            self.assertEqual(replacement.run_calls, 1)
+            self.assertTrue(replacement.isRunning)
+
     def test_apply_rolls_back_and_restarts_old_program_when_new_run_fails(self):
         program = Program(location="/installed")
         def broken_run():
