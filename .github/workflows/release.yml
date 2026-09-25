@@ -51,8 +51,16 @@ jobs:
           $log = Join-Path $env:RUNNER_TEMP "steve-tests.log"
           & python -m unittest discover -s tests -v *> $log
           $testExit = $LASTEXITCODE
-          python scripts/summarize_test_failures.py $log
+          $summary = python scripts/summarize_test_failures.py $log
           $summaryExit = $LASTEXITCODE
+          if ($summaryExit -eq 0) {
+            try {
+              $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 -ErrorAction Stop
+              $summary | Write-Output
+            } catch {
+              $summaryExit = 4
+            }
+          }
           if ($testExit -ne 0) { exit $testExit }
           if ($summaryExit -ne 0) { exit $summaryExit }
       - name: Test chat rendering
@@ -117,8 +125,13 @@ jobs:
           else
             test_exit=$?
           fi
-          if python scripts/summarize_test_failures.py "$log"; then
+          if python scripts/summarize_test_failures.py "$log" >"$RUNNER_TEMP/steve-summary.txt"; then
             summary_exit=0
+            if cat "$RUNNER_TEMP/steve-summary.txt" >>"$GITHUB_STEP_SUMMARY" && cat "$RUNNER_TEMP/steve-summary.txt"; then
+              :
+            else
+              summary_exit=4
+            fi
           else
             summary_exit=$?
           fi
