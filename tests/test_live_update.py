@@ -123,7 +123,7 @@ class LiveUpdateTests(unittest.TestCase):
 
     def test_validate_installed_tree_rejects_hash_mismatch(self):
         with tempfile.TemporaryDirectory() as temp:
-            installed = Path(temp) / "STEVE"
+            installed = Path(temp).resolve() / "STEVE"
             installed.mkdir()
             (installed / "STEVE.manifest").write_text('{"version":"0.5.0"}')
             (installed / "STEVE.py").write_text("ok")
@@ -522,7 +522,7 @@ class LiveUpdateTests(unittest.TestCase):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             with tempfile.TemporaryDirectory() as temp:
-                root = Path(temp)
+                root = Path(temp).resolve()
                 home = root / "home"
                 package = root / "pending" / "STEVE-0.5.0" / "STEVE"
                 installed = root / "AddIns" / "STEVE"
@@ -569,7 +569,7 @@ class LiveUpdateTests(unittest.TestCase):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             with tempfile.TemporaryDirectory() as temp:
-                root = Path(temp)
+                root = Path(temp).resolve()
                 home = root / "home"
                 package = root / "pending" / "STEVE-0.5.0" / "STEVE"
                 backup = root / "AddIns" / ".STEVE-rollback-test"
@@ -794,7 +794,7 @@ class LiveUpdateTests(unittest.TestCase):
                     "steve_updater_observable_" + failure_stage, helper / "STEVEUpdater.py")
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
-                home = Path(tempfile.mkdtemp())
+                home = Path(tempfile.mkdtemp()).resolve()
                 package = home / "pending-updates" / "STEVE-0.5.0"
                 installed = home / "AddIns" / "STEVE"
                 backup = home / "AddIns" / ".STEVE-rollback-test"
