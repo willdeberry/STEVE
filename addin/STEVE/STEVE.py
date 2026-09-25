@@ -9,6 +9,7 @@ import adsk.core
 from .steve.controller import Controller
 from .steve.fusion_tools import FusionTools
 from .steve.clipboard import read_clipboard_image
+from .steve.live_update import acknowledge_startup
 from .steve.version import VERSION
 from .steve.transport import data_home
 from .steve.upgrade import migrate_data
@@ -185,6 +186,31 @@ class WorkspaceActivated(adsk.core.WorkspaceEventHandler):
                 _log_error()
 
 
+def _log_startup_safely():
+    try:
+        if _app:
+            _app.log(f"STEVE {VERSION} loaded. Open STEVE from the Quick Access toolbar or command search.")
+    except Exception:
+        try:
+            if _app:
+                _app.log("STEVE startup diagnostics unavailable; continuing without update acknowledgement")
+        except Exception:
+            pass
+
+
+def _acknowledge_startup_safely():
+    try:
+        acknowledge_startup(data_home())
+    except Exception:
+        # Startup acknowledgement is update evidence, not add-in startup.
+        # Leave recovery state authoritative and keep STEVE running.
+        try:
+            if _app:
+                _app.log("STEVE startup acknowledgement unavailable; live update recovery remains blocked")
+        except Exception:
+            pass
+
+
 def run(context):
     global _app, _controller, _running, _fusion_tools
     try:
@@ -215,7 +241,8 @@ def run(context):
         _controller = Controller(_publish, fusion_tools=_fusion_tools)
         _controller.dispatch("connect")
         _controller.start_update_checks()
-        _app.log(f"STEVE {VERSION} loaded. Open STEVE from the Quick Access toolbar or command search.")
+        _log_startup_safely()
+        _acknowledge_startup_safely()
     except Exception:
         _log_error()
         stop(context)

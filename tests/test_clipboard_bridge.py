@@ -40,6 +40,40 @@ class ClipboardBridgeTests(unittest.TestCase):
         self.entry._app = Obj(fireCustomEvent=Mock())
         self.entry._palette = Obj(isValid=True, sendInfoToHTML=Mock())
 
+    def test_unexpected_startup_ack_failure_does_not_stop_addin(self):
+        self.entry._app.log = Mock(side_effect=RuntimeError("logging unavailable"))
+        with patch.object(self.entry, "acknowledge_startup", side_effect=SyntaxError("malformed helper")), \
+             patch.object(self.entry, "data_home", return_value=ROOT / ".cache" / "ack-test"):
+            self.entry._acknowledge_startup_safely()
+        self.entry._app.log.assert_called_once()
+
+    def test_steve_run_survives_ack_and_diagnostic_log_failure(self):
+        app = Obj(
+            registerCustomEvent=lambda name: Obj(add=lambda handler: None),
+            userInterface=Obj(
+                commandDefinitions=Obj(addButtonDefinition=lambda *args: Obj(commandCreated=Obj())),
+                toolbars=Obj(itemById=lambda name: None),
+                allToolbarPanels=Obj(itemById=lambda name: None),
+                workspaceActivated=Obj(),
+            ),
+        )
+        app.log = Mock(side_effect=[RuntimeError("diagnostic log failed"), RuntimeError("fallback log failed")])
+        self.entry.adsk.core.Application = Obj(get=lambda: app)
+        controller = Obj(dispatch=Mock(), start_update_checks=Mock())
+        stop = Mock()
+        acknowledgement = Mock(return_value=None)
+        with patch.object(self.entry, "migrate_data"), \
+             patch.object(self.entry, "FusionTools", return_value=Obj(close=Mock())), \
+             patch.object(self.entry, "Controller", return_value=controller), \
+             patch.object(self.entry, "_bind"), \
+             patch.object(self.entry, "acknowledge_startup", acknowledgement), \
+             patch.object(self.entry, "stop", stop):
+            self.entry.run(None)
+        stop.assert_not_called()
+        acknowledgement.assert_called_once()
+        self.assertTrue(self.entry._running)
+        self.assertEqual(app.log.call_count, 2)
+
     def test_pixels_are_delivered_separately_on_main_event(self):
         image = {"name": "fixture", "url": "data:image/png;base64,fixture"}
         with patch.object(self.entry, "read_clipboard_image", return_value=image):
