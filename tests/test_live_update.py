@@ -1,5 +1,6 @@
 """In-Fusion updater coordination tests use API stand-ins, never Autodesk Fusion."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -164,7 +165,10 @@ class LiveUpdateTests(unittest.TestCase):
             home = Path(temp) / "home"
             self.assertFalse(live_update_ready(home))
             write_ready(home)
-            self.assertTrue(live_update_ready(home))
+            if os.name == "nt":
+                self.assertFalse(live_update_ready(home))
+            else:
+                self.assertTrue(live_update_ready(home))
             payload = json.loads(ready_path(home).read_text(encoding="utf-8"))
             payload["timestamp"] = time.time() - 10
             ready_path(home).write_text(json.dumps(payload), encoding="utf-8")
@@ -644,6 +648,15 @@ class LiveUpdateTests(unittest.TestCase):
             core_module.revoke_ready(home)
             self.assertTrue((home / "pending-updates" / "steve-updater-ready-revoked.json").is_file())
 
+            if os.name == "nt":
+                with patch.object(module, "_clear_ready_safely") as clear_ready:
+                    module.run(None)
+                self.assertTrue(module._recovery_blocked)
+                clear_ready.assert_called_once_with()
+                self.assertFalse(module._event_handler)
+                self.assertFalse(module._worker)
+                return
+
             class Event:
                 def add(self, handler):
                     pass
@@ -841,6 +854,16 @@ class LiveUpdateTests(unittest.TestCase):
                     unregisterCustomEvent=lambda name: unregistered.append(True),
                 )
                 module.data_home = lambda: home
+                if os.name == "nt":
+                    with patch.object(module, "_clear_ready_safely") as clear_ready:
+                        module.run(None)
+                    self.assertTrue(module._recovery_blocked)
+                    clear_ready.assert_called_once_with()
+                    self.assertEqual(journal_path.read_bytes(), journal_bytes)
+                    self.assertFalse(registered)
+                    self.assertFalse(added)
+                    self.assertFalse(unregistered)
+                    continue
                 module._app = lambda: app
                 module.recover_journal = lambda path: False
                 thread = types.SimpleNamespace(
@@ -1863,6 +1886,14 @@ class LiveUpdateTests(unittest.TestCase):
     def test_journal_write_fails_closed_when_parent_directory_fsync_fails(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp) / "home"
+            if os.name == "nt":
+                staged = home / "staged"
+                installed = home / "AddIns" / "STEVE"
+                journal = begin_journal(home, staged, installed, "0.5.0", request_id="c" * 32)
+                self.assertEqual(load_journal(home)["expectedVersion"], "0.5.0")
+                self.assertEqual(journal, home / "pending-updates" / JOURNAL_NAME)
+                self.assertFalse(any((home / "pending-updates").glob(".journal-*.tmp")))
+                return
             original_fsync = core_module.os.fsync
             calls = [0]
 
@@ -1881,15 +1912,20 @@ class LiveUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp) / "home"
             begin_journal(home, "/staged", "/addins/STEVE", "0.5.0", request_id="d" * 32)
-            original_fsync = core_module.os.fsync
+            if os.name == "nt":
+                clear_journal(home)
+                self.assertFalse((home / "pending-updates" / JOURNAL_NAME).exists())
+                self.assertFalse(any((home / "pending-updates").glob(".journal-*.tmp")))
+            else:
+                original_fsync = core_module.os.fsync
 
-            def fail_cleanup_directory_fsync(fd):
-                raise OSError("cleanup directory fsync failed")
+                def fail_cleanup_directory_fsync(fd):
+                    raise OSError("cleanup directory fsync failed")
 
-            with patch.object(core_module.os, "fsync", side_effect=fail_cleanup_directory_fsync):
-                with self.assertRaisesRegex(OSError, "cleanup directory fsync"):
-                    clear_journal(home)
-            self.assertFalse(any((home / "pending-updates").glob(".journal-*.tmp")))
+                with patch.object(core_module.os, "fsync", side_effect=fail_cleanup_directory_fsync):
+                    with self.assertRaisesRegex(OSError, "cleanup directory fsync"):
+                        clear_journal(home)
+                self.assertFalse(any((home / "pending-updates").glob(".journal-*.tmp")))
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()
