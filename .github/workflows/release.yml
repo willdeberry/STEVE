@@ -47,7 +47,14 @@ jobs:
       - name: Build EXE and portable package; audit source and binaries
         run: python scripts/build_package.py
       - name: Test Python and installer behavior
-        run: python -m unittest discover -s tests -v
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "steve-tests.log"
+          & python -m unittest discover -s tests -v *> $log
+          $testExit = $LASTEXITCODE
+          python scripts/summarize_test_failures.py $log
+          $summaryExit = $LASTEXITCODE
+          if ($testExit -ne 0) { exit $testExit }
+          if ($summaryExit -ne 0) { exit $summaryExit }
       - name: Test chat rendering
         run: node tests/test_panel.cjs
       - name: Test image attachments
@@ -103,7 +110,20 @@ jobs:
       - name: Build package with installer script; audit source and binaries
         run: python scripts/build_package.py
       - name: Test Python and installer behavior
-        run: python -m unittest discover -s tests -v
+        run: |
+          log="$RUNNER_TEMP/steve-tests.log"
+          if python -m unittest discover -s tests -v >"$log" 2>&1; then
+            test_exit=0
+          else
+            test_exit=$?
+          fi
+          if python scripts/summarize_test_failures.py "$log"; then
+            summary_exit=0
+          else
+            summary_exit=$?
+          fi
+          if [[ "$test_exit" -ne 0 ]]; then exit "$test_exit"; fi
+          if [[ "$summary_exit" -ne 0 ]]; then exit "$summary_exit"; fi
       - name: Test chat rendering
         run: node tests/test_panel.cjs
       - name: Test image attachments
