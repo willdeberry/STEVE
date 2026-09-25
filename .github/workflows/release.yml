@@ -126,7 +126,7 @@ jobs:
   publish:
     name: Publish verified preview
     needs: [windows, macos]
-    if: github.repository == 'willdeberry/STEVE' && github.ref == 'refs/heads/test/in-fusion-bootstrap'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'willdeberry/STEVE' && github.ref == 'refs/heads/test/in-fusion-bootstrap'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:

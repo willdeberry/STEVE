@@ -847,11 +847,8 @@ class LiveUpdateTests(unittest.TestCase):
                     start=lambda: (_ for _ in ()).throw(RuntimeError("start failed")),
                     join=lambda timeout=None: joined.append(timeout),
                 )
-                if failure_stage == "start":
-                    module.threading.Thread = lambda *args, **kwargs: thread
-                else:
-                    module.threading.Thread = lambda *args, **kwargs: thread
-                module.run(None)
+                with patch.object(module.threading, "Thread", lambda *args, **kwargs: thread):
+                    module.run(None)
                 self.assertTrue(module._recovery_blocked)
                 self.assertFalse(ready_path(home).exists())
                 self.assertEqual(journal_path.read_bytes(), journal_bytes)
