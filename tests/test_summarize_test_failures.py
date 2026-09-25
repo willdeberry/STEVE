@@ -13,7 +13,11 @@ class SummarizeTestFailuresTests(unittest.TestCase):
                 "ERROR: test_bad\x1b[31m\n"
                 "FAIL: test_ok\x1b[31m\r\n"
                 "::error file=secret.py::do not emit\n"
-                + "ERROR: " + "x" * 10000 + "\n"
+                "OSError: /private/path/should-not-emit\n"
+                "PermissionError: password=should-not-emit\n"
+                "passwordError: password=should-not-emit\n"
+                "secret.pyError: /private/path/should-not-emit\n"
+                "VeryLong" + "x" * 200 + "Error: too long\n"
                 + "Ran 12 tests in 1.2s\n"
                 + "FAILED (errors=1, credential=[REDACTED])\n",
                 encoding="utf-8",
@@ -26,6 +30,11 @@ class SummarizeTestFailuresTests(unittest.TestCase):
         self.assertNotIn("\x1b", output)
         self.assertNotIn("test_bad", output)
         self.assertNotIn("test_ok", output)
+        self.assertIn("TEST_EXCEPTION: type=OSError", output)
+        self.assertIn("TEST_EXCEPTION: type=PermissionError", output)
+        self.assertNotIn("TEST_EXCEPTION: type=passwordError", output)
+        self.assertNotIn("secret.pyError", output)
+        self.assertNotIn("VeryLong", output)
 
     def test_unreadable_log_returns_error_without_traceback(self):
         with tempfile.TemporaryDirectory() as temp:

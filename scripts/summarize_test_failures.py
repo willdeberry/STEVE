@@ -8,6 +8,7 @@ from pathlib import Path
 
 _MAX_LINES = 40
 _MAX_NAME = 120
+_MAX_EXCEPTIONS = 8
 _MAX_OUTPUT = 4096
 _TEST_RESULT = re.compile(
     r"^(ERROR|FAIL):\s+[A-Za-z0-9_]{1,120}\s+\(([A-Za-z0-9_.]{1,120})\)$"
@@ -17,6 +18,14 @@ _FAILED = re.compile(r"^FAILED\s*\(([^()]*)\)$")
 _COUNT = re.compile(
     r"^(errors|failures|skipped|expected failures|unexpected successes)=(\d{1,9})$"
 )
+_EXCEPTION_TYPES = {
+    "AssertionError",
+    "FileNotFoundError",
+    "OSError",
+    "PermissionError",
+    "RuntimeError",
+    "ValueError",
+}
 
 
 def _parse_counts(value: str) -> str | None:
@@ -33,6 +42,7 @@ def _parse_counts(value: str) -> str | None:
 
 def summarize(path: Path) -> list[str]:
     failures: list[tuple[str, str]] = []
+    exceptions: list[str] = []
     ran = None
     failed_counts = None
     with path.open("r", encoding="utf-8", errors="replace") as stream:
@@ -49,9 +59,17 @@ def summarize(path: Path) -> list[str]:
             result = _FAILED.fullmatch(line)
             if result:
                 failed_counts = _parse_counts(result.group(1))
+                continue
+            if ":" in line:
+                exception_name, _message = line.split(":", 1)
+                if (exception_name in _EXCEPTION_TYPES
+                        and len(exceptions) < _MAX_EXCEPTIONS
+                        and exception_name not in exceptions):
+                    exceptions.append(exception_name)
 
     output = [f"TEST_SUMMARY: ran={ran or 'unknown'} failures={len(failures)}"]
     output.extend(f"TEST_FAILURE: kind={kind} name={name}" for kind, name in failures)
+    output.extend(f"TEST_EXCEPTION: type={name}" for name in exceptions)
     if failed_counts:
         output.append(f"TEST_COUNTS: {failed_counts}")
     return output
