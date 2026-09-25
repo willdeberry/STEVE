@@ -343,6 +343,77 @@ class LiveUpdateTests(unittest.TestCase):
         purge_steve_modules(modules)
         self.assertEqual(set(modules), {"steveish", "other"})
 
+    def test_sync_tree_handles_copytree_preserved_read_only_files_on_windows(self):
+        if os.name != "nt":
+            self.skipTest("copytree read-only durability contract is Windows-specific")
+        import shutil
+        import stat
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            source = root / "source"
+            destination = root / "destination"
+            source.mkdir()
+            source_file = source / "read-only.bin"
+            source_file.write_bytes(b"durability regression")
+            source_file.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+            shutil.copytree(source, destination)
+            destination_file = destination / source_file.name
+            before_bytes = destination_file.read_bytes()
+            before_mode = stat.S_IMODE(destination_file.stat().st_mode)
+            core_module._sync_tree(destination)
+            self.assertEqual(destination_file.read_bytes(), before_bytes)
+            self.assertEqual(stat.S_IMODE(destination_file.stat().st_mode), before_mode)
+
+    def test_sync_tree_propagates_regular_file_fsync_failure(self):
+        import stat
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            destination = root / "destination"
+            destination.mkdir()
+            destination_file = destination / "payload.bin"
+            destination_file.write_bytes(b"must remain unchanged")
+            before_mode = stat.S_IMODE(destination_file.stat().st_mode)
+            real_fsync = core_module.os.fsync
+
+            def fail_regular_file_fsync(fd):
+                if stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise OSError("injected regular-file fsync failure")
+                return real_fsync(fd)
+
+            with patch.object(core_module.os, "fsync", side_effect=fail_regular_file_fsync):
+                with self.assertRaisesRegex(OSError, "injected regular-file fsync failure"):
+                    core_module._sync_tree(destination)
+            self.assertEqual(destination_file.read_bytes(), b"must remain unchanged")
+            self.assertEqual(stat.S_IMODE(destination_file.stat().st_mode), before_mode)
+
+    def test_swap_restores_previous_installation_after_sync_failure(self):
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            package = root / "pending-updates" / "STEVE-0.5.0"
+            source = package / "STEVE"
+            installed = root / "AddIns" / "STEVE"
+            source.mkdir(parents=True)
+            installed.mkdir(parents=True)
+            (source / "STEVE.manifest").write_text('{"version":"0.5.0"}')
+            (source / "STEVE.py").write_text("new")
+            (installed / "STEVE.manifest").write_text('{"version":"0.4.0"}')
+            (installed / "STEVE.py").write_text("old")
+            sums = "\n".join(
+                f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
+                for path in sorted(source.iterdir())
+            ) + "\n"
+            (package / "SHA256SUMS").write_text(sums)
+            with patch.object(core_module, "_sync_tree", side_effect=OSError("sync barrier failed")):
+                with self.assertRaisesRegex(OSError, "sync barrier failed"):
+                    core_swap_staged_addin(package, installed, "0.5.0")
+            self.assertEqual((installed / "STEVE.manifest").read_text(), '{"version":"0.4.0"}')
+            self.assertEqual((installed / "STEVE.py").read_text(), "old")
+            self.assertFalse(list(installed.parent.glob(".STEVE-rollback-*")))
+
     def test_swap_keeps_lifecycle_helper_outside_steve(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()
