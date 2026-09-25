@@ -1,7 +1,10 @@
+import io
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 import unittest
 
+from scripts import summarize_test_failures as summary_module
 from scripts.summarize_test_failures import main, summarize
 
 
@@ -18,6 +21,9 @@ class SummarizeTestFailuresTests(unittest.TestCase):
                 "passwordError: password=should-not-emit\n"
                 "secret.pyError: /private/path/should-not-emit\n"
                 "VeryLong" + "x" * 200 + "Error: too long\n"
+                "  File \"/repo/addin/STEVEUpdater/update_core.py\", line 123, in _sync_directory\n"
+                "  File \"C:\\secret\\password.py\", line 9999999, in bad\n"
+                "  File \"/repo/secret.py\", line 7, in leaked\x1b\n"
                 + "Ran 12 tests in 1.2s\n"
                 + "FAILED (errors=1, credential=[REDACTED])\n",
                 encoding="utf-8",
@@ -35,8 +41,40 @@ class SummarizeTestFailuresTests(unittest.TestCase):
         self.assertNotIn("TEST_EXCEPTION: type=passwordError", output)
         self.assertNotIn("secret.pyError", output)
         self.assertNotIn("VeryLong", output)
+        self.assertIn("TEST_FRAME: file=update_core.py line=123", output)
+        self.assertNotIn("password.py", output)
+        self.assertNotIn("secret.py", output)
 
-    def test_unreadable_log_returns_error_without_traceback(self):
+    def test_cli_output_includes_newline_within_total_cap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "tests.log"
+            path.write_text(
+                "Ran 1 tests in 0.01s\n"
+                + "ERROR: test_failure (test_live_update.LiveUpdateTests.test_failure)\n"
+                + "OSError: details\n"
+                + "  File \\\"/repo/update_core.py\\\", line 123, in _sync_directory\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                self.assertEqual(main(["summarize_test_failures.py", str(path)]), 0)
+        self.assertLessEqual(len(stdout.getvalue()), summary_module._MAX_OUTPUT)
+        self.assertTrue(stdout.getvalue().endswith("\n"))
+
+    def test_valid_posix_windows_and_unc_frames_are_emitted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "tests.log"
+            path.write_text(
+                "  File \"/repo/update_core.py\", line 12, in _sync_directory\n"
+                "  File \"C:\\\\repo\\\\live_update.py\", line 34, in swap\n"
+                "  File \"\\\\server\\share\\STEVEUpdater.py\", line 56, in run\n",
+                encoding="utf-8",
+            )
+            output = "\n".join(summarize(path))
+        self.assertIn("TEST_FRAME: file=update_core.py line=12", output)
+        self.assertIn("TEST_FRAME: file=live_update.py line=34", output)
+        self.assertIn("TEST_FRAME: file=STEVEUpdater.py line=56", output)
+
         with tempfile.TemporaryDirectory() as temp:
             missing = Path(temp) / "missing.log"
             self.assertEqual(main(["summarize_test_failures.py", str(missing)]), 3)
